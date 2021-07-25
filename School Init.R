@@ -1,0 +1,18 @@
+library(haven)
+
+get_formula_for_table_1_lottery <- function(outcome, col_factors, fixed, endogen, iv){
+  return(as.formula(paste(outcome, "~ 1+ ", paste(col_factors, collapse=" + "),
+                          "|", fixed,
+                          "| (", endogen, "~", paste(c(iv, col_factors), collapse=" + "), ")",
+                          "|", fixed))
+  )
+}
+
+get_formula_for_iv_by_NC <- function(iv, fixed, NC){
+  return(as.formula(paste(iv, "~ ", paste(NC, collapse=" + "),
+                          "|", fixed))
+  ) 
+}
+
+cms <- read_dta("data//cms_added_columns.dta") 
+curr_cms <- dplyr::filter(cms, !is.na(cms$lottery_FE))

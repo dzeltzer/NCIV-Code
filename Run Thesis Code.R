@@ -1,0 +1,86 @@
+set.seed(12345)
+
+# This file contains all the necessary functions for the NCIV approach
+source("NCIV Main.R")
+
+cl <- makeCluster(24)
+registerDoParallel(cl)
+
+# Using School Choice Lotteries to Test Measures of School Effectiveness (Deming)
+gi
+# This file loads all the necessary data and functions for school article
+source("School Init.R")
+
+# This file consists the function that run NCIV test for few potential IVs in Deming
+source("School Run.R")
+
+# run potential IVS for lottery article
+run_school_nciv(curr_cms= curr_cms, ivs= c("lottery", "lott_VA","new_lott_VA"),
+                iterations=1, permutations=100, ntree= 100,
+                 mtry_ratio= 1/3, OOB=T, randomize_lottery=F)
+
+#run sanity check (replace lottery with Bernoulli RV)
+run_school_nciv(curr_cms= curr_cms, ivs= c("lottery"), iterations= 1,
+                permutations=20, ntree=20,
+                mtry_ratio= 1/3, OOB=T, randomize_lottery=T)
+
+# The China Syndrome: Local Labor Market Effects of Import Competition in the
+# United States (Autor, Dorn, and Hanson)
+
+# This file loads all the necessary data functions, and variables groups for China article
+source("China Init.R")
+
+# This file loads all the necessary functions that runs replication of table 3,
+# and NCIV test for China article
+source("China Run.R")
+replicate_table_3(workfile_china, col_2_controls, col_3_controls,
+                  col_4_controls, col_5_controls, col_6_controls, G, N)
+
+# run NCIV test for the IV used in China article with all the available NC 
+run_china_nciv(data= china_1990, instrument_form= "instrument2000",
+               instrument= "instrument2000", col_2_controls= col_2_controls,
+               col_3_controls= col_3_controls, col_4_controls= col_4_controls,
+               col_5_controls= col_5_controls, col_6_controls= col_6_controls,
+               weights= "timepwt48", 
+               variables_to_remove= c("timepwt48", "instrument2000", "outcome2000"),
+               permutations= 100, OOB= T, mtry_ratio= 1/3, ntree= 100, title= "China")
+
+
+# outcome1990 is the only NC for the original NC test used in the article in 
+# our interpretation
+run_china_nciv(data= china_1990_only_org_nc, instrument_form= "instrument2000",
+               instrument= "instrument2000", col_2_controls= col_2_controls,
+               col_3_controls= col_3_controls, col_4_controls= col_4_controls,
+               col_5_controls= col_5_controls, col_6_controls= col_6_controls,
+               weights= "timepwt48", 
+               variables_to_remove= c("timepwt48", "instrument2000"),
+               permutations= 50, OOB= T, mtry_ratio= 1, ntree= 100, title= "China Orginal")
+
+# Simulations
+# this files file loads all the necessary functions for the simulations: Data generations, and benchmark
+# tests algorithms
+source("Data Generators.R")
+
+source("Interactions Simulations.R")
+
+run_interactions_simulations(n_value= 200, number_of_all_ncs_value = 10,
+                             n_iterations = 2, n_permutations = 12,
+                             nc_power_value=1,rejection_rate = 0.05,
+                             number_of_good_ncs_values = c(2, 3),
+                             alpha_values = c(0, 1),
+                             singal_nc_power = 0.5,
+                             ntree = 10)
+
+source("Degrees Simulations.R")
+
+run_degrees_simulations(n_value= 200, number_of_all_ncs_value = 10,
+                             n_iterations = 2, n_permutations = 12,
+                             nc_power_value=1,rejection_rate = 0.05,
+                             number_of_good_ncs_values = c(2, 3),
+                             alpha_values = c(0, 1),
+                             singal_nc_power = 0.5,
+                             ntree = 10)
+
+
+
+
