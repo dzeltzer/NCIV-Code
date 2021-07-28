@@ -1,23 +1,51 @@
 set.seed(12345)
 
+# Loads the necessary libraries for the whole project. You can open the file 
+# and see whether you need to install some libraries
+source("Load Libraries.R")
+
 # This file contains all the necessary functions for the NCIV approach
+# sourcing the file will load the main functions:
+# (1) permutations.test.for.felm
+# (2) permutations.test.for.lm
+# which perform a NCIV permutations test
+# and the corresponding inner functions:
+# run.rf.multiple.negative.controls (inner functions of )
+# get_NC_matrix_felm
+# get_NC_matrix
+# calculate.visualize.p.values
+# as well as:
+# (3) get_stata_coef 
+# which get heteroscedasticity consistent estimates for linear model
 source("NCIV Main.R")
 
-cl <- makeCluster(24)
+cl <- makeCluster(detectCores())
 registerDoParallel(cl)
 
-# Using School Choice Lotteries to Test Measures of School Effectiveness (Deming)
-gi
+# "Using School Choice Lotteries to Test Measures of School Effectiveness" (Deming)
+
 # This file loads all the necessary data and functions for school article
+# sourcing the file will result in loading the main functions:
+# (1) get_formula_for_table_1_lottery() 
+# which creates the formula for replicating table 1 at the article
+# (2) get_formula_for_iv_by_NC
+# which residualize the iv given the NCs
+# As well as loading cms data:
+# (1) cms - the "raw" data, the output of the Stata do file 
+# (2) curr_cms - only rows that have the lottery_fe (fixed effects), which is the
+# unit of randomization for the lottery
+
 source("School Init.R")
 
-# This file consists the function that run NCIV test for few potential IVs in Deming
+# This file consists the function that runs NCIV test for few potential IVs in Deming
+# sourcing the file will result in loading the following function:
+# (*) run_school_nciv() - which runs a permutations test (both lm and felm)
 source("School Run.R")
 
 # run potential IVS for lottery article
 run_school_nciv(curr_cms= curr_cms, ivs= c("lottery", "lott_VA","new_lott_VA"),
                 iterations=1, permutations=100, ntree= 100,
-                 mtry_ratio= 1/3, OOB=T, randomize_lottery=F)
+                mtry_ratio= 1/3, OOB=T, randomize_lottery=F)
 
 #run sanity check (replace lottery with Bernoulli RV)
 run_school_nciv(curr_cms= curr_cms, ivs= c("lottery"), iterations= 1,
@@ -74,12 +102,12 @@ run_interactions_simulations(n_value= 200, number_of_all_ncs_value = 10,
 source("Degrees Simulations.R")
 
 run_degrees_simulations(n_value= 200, number_of_all_ncs_value = 10,
-                             n_iterations = 2, n_permutations = 12,
-                             nc_power_value=1,rejection_rate = 0.05,
-                             number_of_good_ncs_values = c(2, 3),
-                             alpha_values = c(0, 1),
-                             singal_nc_power = 0.5,
-                             ntree = 10)
+                        n_iterations = 2, n_permutations = 12,
+                        nc_power_value=1,rejection_rate = 0.05,
+                        number_of_good_ncs_values = c(2, 3),
+                        alpha_values = c(0, 1),
+                        singal_nc_power = 0.5,
+                        ntree = 10)
 
 
 

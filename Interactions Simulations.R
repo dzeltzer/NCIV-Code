@@ -1,4 +1,3 @@
-library(systemfit)
 
 run_interactions_simulations <- function(n_value, number_of_all_ncs_value, n_iterations,
                                          n_permutations, nc_power_value, rejection_rate,
