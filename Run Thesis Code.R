@@ -4,6 +4,81 @@ set.seed(12345)
 # and see whether you need to install some libraries
 source("Load Libraries.R")
 
+# Section 4 - Examples
+
+
+Figure variable importance - We will take this if the same figure for Deming doesn’t look good. 
+Y axis - when “y” is the label
+X axis - when IV is the label 
+Using specification of column 6 
+
+# The China Syndrome: Local Labor Market Effects of Import Competition in the
+# United States (Autor, Dorn, and Hanson)
+
+# This file loads all the necessary data functions, and variables groups for China article
+# sourcing this will result in loading the main functions:
+# (1) get_formula_for_table_3() 
+# which creates the formula for replicating table 3 in the article
+# as well as loading:
+# (1) workfile_china
+# basic data set used for replicating table 3 in the article
+# (2) china_1990
+# data set with only 1990 data with all available negative controls
+# (3) china_1990_only_org_nc
+# data set with only 1990 data with only the negative control used in the
+# article - the outcome in 2000
+# (4) col_2_controls - col_4_controls, location_controls, man_controls ...
+# different groups of controls
+source("China Init.R")
+
+# This file loads all the necessary functions that runs replication of table 3,
+# and NCIV test for China article
+# sourcing this will result in loading the main functions:
+# (1) replicate_table_3()
+# (2) run_china_nciv() - runs 5 different controls specifications of NCIV
+#     test on the IV (delta trade to other states)
+source("China Run.R")
+
+
+replicate_table_3(workfile_china, col_2_controls, col_3_controls,
+                  col_4_controls, col_5_controls, col_6_controls, G, N)
+
+# Table: Autor p values
+# Rows: using only their negative control, using all negative controls
+# Cols: different controls as in the paper
+# run NCIV test for the IV used in China article with all the available NC 
+china_all_ncs_p_values <- run_china_nciv(data= china_1990, 
+              instrument_form= "instrument2000",instrument= "instrument2000",
+              col_2_controls= col_2_controls, col_3_controls= col_3_controls,
+              col_4_controls= col_4_controls,col_5_controls= col_5_controls,
+              col_6_controls= col_6_controls, weights= "timepwt48", 
+               variables_to_remove= c("timepwt48", "instrument2000", "outcome2000"),
+               permutations= 100, OOB= T, mtry_ratio= 1/3, ntree= 100, title= "China")
+
+
+# outcome1990 is the only NC for the original NC test used in the article in 
+# our interpretation. Run NCIV test for when the only NC is the outcome1990
+run_china_nciv(data= china_1990_only_org_nc, instrument_form= "instrument2000",
+               instrument= "instrument2000", col_2_controls= col_2_controls,
+               col_3_controls= col_3_controls, col_4_controls= col_4_controls,
+               col_5_controls= col_5_controls, col_6_controls= col_6_controls,
+               weights= "timepwt48", 
+               variables_to_remove= c("timepwt48", "instrument2000"),
+               permutations= 50, OOB= T, mtry_ratio= 1, ntree= 100, title= "China Orginal")
+
+
+Deming - histogram of of permutation test
+A - his instrument
+B - our instrument (without home school)
+Using the specification that he uses in the paper
+Tabe: Deming p-value
+Rows: instruments (his IV, raw lottery results, corrected IV)
+Cols: different controls (none, lottery fixed effects, home school) 
+Figure - variable importance
+With the flawed (original) IV
+(We hope to find that home school will be correlated with both the IV and Y)
+
+
 # This file contains all the necessary functions for the NCIV approach
 # sourcing the file will load the main functions:
 # (1) permutations.test.for.felm
@@ -52,56 +127,6 @@ run_school_nciv(data= curr_cms, ivs= c("lottery", "lott_VA","new_lott_VA"),
 #                 permutations=20, ntree=20,
 #                 mtry_ratio= 1/3, OOB=T, randomize_lottery=T)
 
-# The China Syndrome: Local Labor Market Effects of Import Competition in the
-# United States (Autor, Dorn, and Hanson)
-
-# This file loads all the necessary data functions, and variables groups for China article
-# sourcing this will result in loading the main functions:
-# (1) get_formula_for_table_3() 
-# which creates the formula for replicating table 3 in the article
-# as well as loading:
-# (1) workfile_china
-# basic data set used for replicating table 3 in the article
-# (2) china_1990
-# data set with only 1990 data with all available negative controls
-# (3) china_1990_only_org_nc
-# data set with only 1990 data with only the negative control used in the
-# article - the outcome in 2000
-# (4) col_2_controls - col_4_controls, location_controls, man_controls ...
-# different groups of controls
-source("China Init.R")
-
-# This file loads all the necessary functions that runs replication of table 3,
-# and NCIV test for China article
-# sourcing this will result in loading the main functions:
-# (1) replicate_table_3()
-# (2) run_china_nciv() - runs 5 different controls specifications of NCIV
-#     test on the IV (delta trade to other states)
-source("China Run.R")
-
-
-replicate_table_3(workfile_china, col_2_controls, col_3_controls,
-                  col_4_controls, col_5_controls, col_6_controls, G, N)
-
-# run NCIV test for the IV used in China article with all the available NC 
-run_china_nciv(data= china_1990, instrument_form= "instrument2000",
-               instrument= "instrument2000", col_2_controls= col_2_controls,
-               col_3_controls= col_3_controls, col_4_controls= col_4_controls,
-               col_5_controls= col_5_controls, col_6_controls= col_6_controls,
-               weights= "timepwt48", 
-               variables_to_remove= c("timepwt48", "instrument2000", "outcome2000"),
-               permutations= 100, OOB= T, mtry_ratio= 1/3, ntree= 100, title= "China")
-
-
-# outcome1990 is the only NC for the original NC test used in the article in 
-# our interpretation. Run NCIV test for when the only NC is the outcome1990
-run_china_nciv(data= china_1990_only_org_nc, instrument_form= "instrument2000",
-               instrument= "instrument2000", col_2_controls= col_2_controls,
-               col_3_controls= col_3_controls, col_4_controls= col_4_controls,
-               col_5_controls= col_5_controls, col_6_controls= col_6_controls,
-               weights= "timepwt48", 
-               variables_to_remove= c("timepwt48", "instrument2000"),
-               permutations= 50, OOB= T, mtry_ratio= 1, ntree= 100, title= "China Orginal")
 
 # Simulations
 # this files file loads all the necessary functions for the simulations: Data generations, and benchmark

@@ -57,7 +57,9 @@ run_china_nciv <- function(data, # China data
                            # each iteration of RF algorithm
                            ntree, # the number of trees in the RF prediction
                            # algorithm used for NCIV test
-                           title # the title for the output file and graph
+                           title, # the title for the output file and graph,
+                           saveplot ## whether to save plot and CSV of the 
+                           # permutations test p
                            )
   {
   rmse_rf_col_2 <- permutations.test.for.lm(data= data, instrument_form= instrument_form,
@@ -65,7 +67,7 @@ run_china_nciv <- function(data, # China data
                                             controls= col_2_controls[2:length(col_2_controls)],
                                             weights=weights, variables_to_remove= variables_to_remove,
                                             title = paste(title,"col 2"), n_permutations= permutations,
-                                            conditioned = T, OOB= OOB, saveplot=T,
+                                            conditioned = T, OOB= OOB, saveplot=saveplot,
                                             mtry_ratio=mtry_ratio, ntree=ntree)
 
   rmse_rf_col_3 <- permutations.test.for.lm(data= data, instrument_form= instrument_form,
@@ -73,7 +75,7 @@ run_china_nciv <- function(data, # China data
                                             controls= col_3_controls[2:length(col_3_controls)],
                                             weights=weights, variables_to_remove= variables_to_remove,
                                             title = paste(title,"col 3"), n_permutations= permutations,
-                                            conditioned = T, OOB= OOB, saveplot=T,
+                                            conditioned = T, OOB= OOB, saveplot=saveplot,
                                             mtry_ratio=mtry_ratio, ntree=ntree)
 
   rmse_rf_col_4 <- permutations.test.for.lm(data= data, instrument_form= instrument_form,
@@ -81,7 +83,7 @@ run_china_nciv <- function(data, # China data
                                             controls= col_4_controls[2:length(col_4_controls)],
                                             weights=weights, variables_to_remove= variables_to_remove,
                                             title = paste(title,"col 4"), n_permutations= permutations,
-                                            conditioned = T, OOB= OOB, saveplot=T,
+                                            conditioned = T, OOB= OOB, saveplot=saveplot,
                                             mtry_ratio=mtry_ratio, ntree=ntree)
 
   rmse_rf_col_5 <- permutations.test.for.lm(data= data, instrument_form= instrument_form,
@@ -89,7 +91,7 @@ run_china_nciv <- function(data, # China data
                                             controls= col_5_controls[2:length(col_5_controls)],
                                             weights=weights, variables_to_remove= variables_to_remove,
                                             title = paste(title,"col 5"), n_permutations= permutations,
-                                            conditioned = T, OOB= OOB, saveplot=T,
+                                            conditioned = T, OOB= OOB, saveplot=saveplot,
                                             mtry_ratio=mtry_ratio, ntree=ntree)
   
   rmse_rf_col_6 <- permutations.test.for.lm(data= data, instrument_form= instrument_form,
@@ -97,11 +99,11 @@ run_china_nciv <- function(data, # China data
                                             controls= col_6_controls[2:length(col_6_controls)],
                                             weights=weights, variables_to_remove= variables_to_remove,
                                             title = paste(title,"col 6"), n_permutations= permutations,
-                                            conditioned = T, OOB= OOB, saveplot=T,
+                                            conditioned = T, OOB= OOB, saveplot=saveplot,
                                             mtry_ratio=mtry_ratio, ntree=ntree)
   
   results <- rbind(c(rmse_rf_col_2, rmse_rf_col_3, rmse_rf_col_4,
                      rmse_rf_col_5, rmse_rf_col_6))
-  write_csv(as.data.frame(results), sprintf("out//china_results_ntree%s.csv", ntree))
+  return(results)
   }
   

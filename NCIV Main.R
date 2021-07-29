@@ -294,11 +294,12 @@ calculate.visualize.p.values <- function(controls_results, #the MSE of predictin
       xlab(Xaxis) +
       ggtitle(title)
     print(p)
-    file_title <- stringr::str_trim(sprintf("out//%s",gsub("[.]|[:]|[\n]|[,]", " ",title)))
-    ggsave(sprintf("%s.png", file_title), p)
+    file_title <- stringr::str_trim(sprintf("%s",gsub("[.]|[:]|[\n]|[,]", " ",title)))
+    file_full_path <- file.path("out", file_title)
+    ggsave(sprintf("%s.png", file_full_path), p)
     results <- data.frame(permutations_results, 
                           controls_results= c(controls_results, rep(NA, length(permutations_results)-1)))
-    write.csv(results, sprintf("%s.csv", file_title))
+    write.csv(results, sprintf("%s.csv", file_full_path))
   }
   
   
