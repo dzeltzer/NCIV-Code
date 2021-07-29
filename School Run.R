@@ -94,7 +94,7 @@ run_school_nciv <- function(data, #cms school data
           }
 
           #(Section 4.e) ii.	Cols: different controls (none (at all), none (specified model), lottery fixed effects, home school)
-          # For each IV we present 4 different controls models for the NCIV test
+          # For each IV we present 4 different controls specifications for the NCIV test
           # note that a valid IV is an IV that doesn;t reject the null, therefore
           # generally, adding more controls can make it happe
           # (1) Linear model with no controls

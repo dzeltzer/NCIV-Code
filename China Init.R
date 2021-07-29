@@ -1,9 +1,14 @@
 library(haven)
 library(dplyr)
 
-workfile_china_raw_path <- "data\\workfile_china.dta"
+workfile_china_raw_path <- file.path("data", "workfile_china.dta")
 workfile_china_raw <- read_dta(workfile_china_raw_path)
 
+# czone= commuting zone, the basic economic unit used in the article
+# we give explicit names for regressions.
+# instrument = d_tradeotch_pw_lag - delta in trade to other states from China
+# exposure = d_tradeusch_pw - delta in trade to US from China
+# outcome = d_sh_empl_mfg - delta in employment in manufacturing 
 workfile_china <- workfile_china_raw  %>%
   left_join (
     workfile_china_raw %>%
@@ -18,6 +23,9 @@ workfile_china <- workfile_china_raw  %>%
     , by= "czone")
 
 #t2 should be removed because we check NCIV only on 1990 data
+# czone, yr, statefip, city are not numrical
+# other variables removed because they don't reflect the status in 
+# 1990 only (delta, change of any sort)
 china_1990 <- workfile_china %>%
   filter(yr == 1990) %>%
   select(-c("l_tradeusch_pw", "l_tradeotch_pw",
@@ -31,9 +39,17 @@ assertthat::are_equal(nrow(workfile_china) , 1444)
 assertthat::are_equal(ncol(china_1990) , 67)
 assertthat::are_equal(nrow(china_1990) , 722)
 
-
+# used for getting heteroscedasticity stds for table 3 replication
 G <- length(unique(workfile_china$statefip))
 N <- length(workfile_china$statefip)
+
+get_formula_for_table_3 <- function(col_controls){
+  return(as.formula(paste("d_sh_empl_mfg ~ d_tradeusch_pw +", paste(col_controls, collapse="+"),
+                          paste("| . - d_tradeusch_pw + d_tradeotch_pw_lag"))))
+}
+
+# Different groups of controls for replication and NCIV test of the specifications
+# of table 3
 
 # eststo: ivregress 2sls d_sh_empl_mfg (d_tradeusch_pw=d_tradeotch_pw_lag) l_shind_manuf_cbp t2 [aw=timepwt48], cluster(statefip) first
 col_2_controls <- c("t2", "l_shind_manuf_cbp")
@@ -53,18 +69,14 @@ all_controls <- col_6_controls[2:length(col_6_controls)]
 #eststo: ivregress 2sls d_sh_empl_mfg (d_tradeusch_pw_future=d_tradeotch_pw_lag_future) [aw=timepwt48] if yr==1980, cluster(statefip)
 #eststo: ivregress 2sls d_sh_empl_mfg (d_tradeusch_pw_future=d_tradeotch_pw_lag_future) t1980 [aw=timepwt48] if yr>=1970 & yr<1990, cluster(statefip)
 
+# Data set with only 1990 data with only the negative control used in the
+# article - the outcome in 2000
 china_1990_only_org_nc <- china_1990 %>% select(c(col_6_controls[2:length(col_6_controls)], "timepwt48", "instrument2000", "outcome1990"))
 
 assertthat::are_equal(ncol(china_1990_only_org_nc) , 17)
 assertthat::are_equal(nrow(china_1990_only_org_nc) , 722)
 
-get_formula_for_table_3 <- function(col_controls){
-  return(as.formula(paste("d_sh_empl_mfg ~ d_tradeusch_pw +", paste(col_controls, collapse="+"),
-                          paste("| . - d_tradeusch_pw + d_tradeotch_pw_lag"))))
-}
-
-
-
+# More groups of controls
 location_controls <- c("factor(statefip)",	"city")
 #mfg= manufacring
 man_controls <- c("l_shind_manuf_cbp",

@@ -14,5 +14,6 @@ get_formula_for_iv_by_NC <- function(iv, fixed, NC){
   ) 
 }
 
-cms <- read_dta("data//cms_added_columns.dta") 
+cms_path <- file.path("data", "cms_added_columns.dta")
+cms <- read_dta(cms_path) 
 curr_cms <- dplyr::filter(cms, !is.na(cms$lottery_FE))
