@@ -8,11 +8,12 @@ get_formula_for_table_1_lottery <- function(outcome, col_factors, fixed, endogen
   )
 }
 
-get_formula_for_iv_by_NC <- function(iv, fixed, NC){
-  return(as.formula(paste(iv, "~ ", paste(NC, collapse=" + "),
+get_formula_for_iv_by_controls <- function(iv, fixed, controls){
+  return(as.formula(paste(iv, "~ ", paste(controls, collapse=" + "),
                           "|", fixed))
   ) 
 }
+
 
 cms_path <- file.path("data", "cms_added_columns.dta")
 cms <- read_dta(cms_path) 

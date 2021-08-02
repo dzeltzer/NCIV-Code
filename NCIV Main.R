@@ -145,25 +145,6 @@ get_NC_matrix_felm <- function(data, #matrix of the data (controls+NCs)
 # predicted from the NCs
 
 
-# ins_lfe_formula, #the fixed effects formula
-# # for the iv
-# instrument, # the name of the instrument
-# controls, # the names of the controls
-# fixed, # the name of the fixed effects groups
-# variables_to_remove, # the names of the variables 
-# title, #the title for the output file and graph
-# n_permutations= 5, # the number of permutations in each 
-# # NCIV test
-# conditioned = T, #whether to residualize on the controls
-# OOB=F, # use Out Of Bag RMSE instead of Cross Validation
-# # error
-# saveplot=T, # whether to save plot and CSV of the 
-# # permutations test p
-# mtry_ratio, #the ratio of variables to check in 
-# # each iteration of RF algorithm
-# ntree # the number of trees in the RF prediction
-# # algorithm used for NCIV test
-
 permutations.test.for.lm <- function(data, 
                                      instrument_form, # the form of the instrument, 
                                      # for example: logarithmic: log(instrument2000), 
@@ -344,18 +325,37 @@ draw_importance_graph <- function(data,
                                   )  {
   
   ins_formula <- as.formula(paste(instrument, "~", paste(controls, collapse="+"))) 
-  lm_of_controls <- rlang::eval_tidy(rlang::quo(
-    lm(
-      ins_formula,
-      data = data,
-      weights = !!as.name(weights))
-  ))
-  instrument_res <- lm_of_controls$residuals
+  ins_lm <-  lm(as.formula(ins_formula), data = data)
+  y_formula <- as.formula(paste(y, "~", paste(controls, collapse="+"))) 
+  y_lm <- lm(as.formula(y_formula), data = data)
   
-  NC <- get_NC_matrix(select(data,-one_of(variables_to_remove)),  controls, T)
+  weights_vec <- NULL
+  if (!is.null(weights)){
+    ins_lm <- rlang::eval_tidy(rlang::quo(
+      lm(
+        ins_formula,
+        data = data,
+        weights = !!as.name(weights))
+    ))
+    
+    y_lm <- rlang::eval_tidy(rlang::quo(
+      lm(
+        y_formula,
+        data = data,
+        weights = !!as.name(weights))
+    ))
+    
+    weights_vec <- pull(data, weights)
+  }
+    
+  instrument_res <- ins_lm$residuals
+  y_res <- y_lm$residuals
+  
+  NC <- get_NC_matrix(select(data,-one_of(variables_to_remove)),  controls,
+                      weights_vec, T)
   
   model_ins <- randomForest::randomForest(NC, instrument_res)
-  model_y <- randomForest::randomForest(NC, y)
+  model_y <- randomForest::randomForest(NC, y_res)
   
   vi_scores_ins_raw <- importance(model_ins, type= 2, scale =T)
   vi_scores_ins <- vi_scores_ins_raw / max(vi_scores_ins_raw)
@@ -369,12 +369,18 @@ draw_importance_graph <- function(data,
                by = "variable")
   colnames(vi_scores)[2:3] <- c("ins_score", "y_score")
   
+  file_title <- paste("Variable Importance", title)
   
   p <- ggplot(vi_scores, aes(ins_score, y_score, label = variable,
                              color = variable %in% all_controls))+
     geom_point() +
-    ggtitle(title)
-  plotly::ggplotly(p)
+    ggtitle(file_title)
+  
+  print(plotly::ggplotly(p))
+  
+  file_full_path <- file.path("out", file_title)
+  ggsave(sprintf("%s.png", file_full_path), p)
+  write.csv(vi_scores, sprintf("%s.csv", file_full_path))
 }
 
 
@@ -382,7 +388,7 @@ draw_importance_graph <- function(data,
 # given the controls using fixed effects model
 # input: data and names of Y, IV and controls
 # output: graph
-draw_importance_graph_fle <- function(data,
+draw_felm_importance_graph <- function(data,
                                       y, #name of the outcome
                                       ins_lfe_formula, #the fixed effects formula
                                       # for the iv
@@ -422,9 +428,16 @@ draw_importance_graph_fle <- function(data,
   colnames(vi_scores)[2:3] <- c("ins_score", "y_score")
   
   
+  file_title <- paste("Variable Importance", title)
+  
   p <- ggplot(vi_scores, aes(ins_score, y_score, label = variable,
                              color = variable %in% all_controls))+
     geom_point() +
-    ggtitle(title)
-  plotly::ggplotly(p)
+    ggtitle(file_title)
+  
+  print(plotly::ggplotly(p))
+  
+  file_full_path <- file.path("out", file_title)
+  ggsave(sprintf("%s.png", file_full_path), p)
+  write.csv(vi_scores, sprintf("%s.csv", file_full_path))
 }

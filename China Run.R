@@ -58,7 +58,7 @@ run_china_nciv <- function(data, # China data
                            ntree, # the number of trees in the RF prediction
                            # algorithm used for NCIV test
                            title, # the title for the output file and graph,
-                           saveplot ## whether to save plot and CSV of the 
+                           saveplot # whether to save plot and CSV of the 
                            # permutations test p
                            )
   {

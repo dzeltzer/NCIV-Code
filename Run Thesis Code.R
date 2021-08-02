@@ -4,13 +4,26 @@ set.seed(12345)
 # and see whether you need to install some libraries
 source("Load Libraries.R")
 
+# This file contains all the necessary functions for the NCIV approach
+# sourcing the file will load the main functions:
+# (1) permutations.test.for.felm
+# (2) permutations.test.for.lm
+# which perform a NCIV permutations test
+# and the corresponding inner functions:
+# run.rf.multiple.negative.controls (inner functions of )
+# get_NC_matrix_felm
+# get_NC_matrix
+# calculate.visualize.p.values
+# as well as:
+# (3) get_stata_coef 
+# which get heteroscedasticity consistent estimates for linear model
+source("NCIV Main.R")
+
+#stopCluster(cl)
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+
 # Section 4 - Examples
-
-
-Figure variable importance - We will take this if the same figure for Deming doesn’t look good. 
-Y axis - when “y” is the label
-X axis - when IV is the label 
-Using specification of column 6 
 
 # The China Syndrome: Local Labor Market Effects of Import Competition in the
 # United States (Autor, Dorn, and Hanson)
@@ -43,9 +56,22 @@ source("China Run.R")
 replicate_table_3(workfile_china, col_2_controls, col_3_controls,
                   col_4_controls, col_5_controls, col_6_controls, G, N)
 
+# Autor - distribution of permutation test 
+# Full specification - column 6
+
+permutations.test.for.lm(data= china_1990, instrument_form= "instrument2000",
+                         instrument= "instrument2000",
+                         controls= col_6_controls[2:length(col_6_controls)],
+                         weights="timepwt48",
+                         variables_to_remove= c("timepwt48", "instrument2000", "outcome2000"),
+                         title = "China column 6", n_permutations= 100,
+                         conditioned = T, OOB= T, saveplot=T,
+                         mtry_ratio=1/3, ntree=100)
+
 # Table: Autor p values
 # Rows: using only their negative control, using all negative controls
 # Cols: different controls as in the paper
+
 # run NCIV test for the IV used in China article with all the available NC 
 china_all_ncs_p_values <- run_china_nciv(data= china_1990, 
               instrument_form= "instrument2000",instrument= "instrument2000",
@@ -53,49 +79,41 @@ china_all_ncs_p_values <- run_china_nciv(data= china_1990,
               col_4_controls= col_4_controls,col_5_controls= col_5_controls,
               col_6_controls= col_6_controls, weights= "timepwt48", 
                variables_to_remove= c("timepwt48", "instrument2000", "outcome2000"),
-               permutations= 100, OOB= T, mtry_ratio= 1/3, ntree= 100, title= "China")
+               permutations= 100, OOB= T, mtry_ratio= 1/3, ntree= 100, title= "China",
+              saveplot= F)
 
 
 # outcome1990 is the only NC for the original NC test used in the article in 
 # our interpretation. Run NCIV test for when the only NC is the outcome1990
-run_china_nciv(data= china_1990_only_org_nc, instrument_form= "instrument2000",
+china_original_nc_only_p_values <- run_china_nciv(data= china_1990_only_org_nc, instrument_form= "instrument2000",
                instrument= "instrument2000", col_2_controls= col_2_controls,
                col_3_controls= col_3_controls, col_4_controls= col_4_controls,
                col_5_controls= col_5_controls, col_6_controls= col_6_controls,
                weights= "timepwt48", 
                variables_to_remove= c("timepwt48", "instrument2000"),
-               permutations= 50, OOB= T, mtry_ratio= 1, ntree= 100, title= "China Orginal")
+               permutations= 50, OOB= T, mtry_ratio= 1, ntree= 100, title= "China Orginal",
+               saveplot= F)
 
+china_p_values_table <- data.frame(rbind(china_all_ncs_p_values, china_original_nc_only_p_values))
+colnames(china_p_values_table) <- paste("Column ", 2:6)
+rownames(china_p_values_table) <- c("all_ncs", "original_nc_only")
 
-Deming - histogram of of permutation test
-A - his instrument
-B - our instrument (without home school)
-Using the specification that he uses in the paper
-Tabe: Deming p-value
-Rows: instruments (his IV, raw lottery results, corrected IV)
-Cols: different controls (none, lottery fixed effects, home school) 
-Figure - variable importance
-With the flawed (original) IV
-(We hope to find that home school will be correlated with both the IV and Y)
+china_p_values_table_path <- file.path("out", "china_p_values_table.csv")
+write.csv(china_p_values_table, china_p_values_table_path)
 
+# Figure variable importance 
+# Y axis - when “y” is the label
+# X axis - when IV is the label 
+# Using specification of column 6 
 
-# This file contains all the necessary functions for the NCIV approach
-# sourcing the file will load the main functions:
-# (1) permutations.test.for.felm
-# (2) permutations.test.for.lm
-# which perform a NCIV permutations test
-# and the corresponding inner functions:
-# run.rf.multiple.negative.controls (inner functions of )
-# get_NC_matrix_felm
-# get_NC_matrix
-# calculate.visualize.p.values
-# as well as:
-# (3) get_stata_coef 
-# which get heteroscedasticity consistent estimates for linear model
-source("NCIV Main.R")
+draw_importance_graph(china_1990, y= "outcome1990",
+                      instrument = "instrument2000",
+                      controls= col_6_controls[2:length(col_6_controls)],
+                      all_controls= all_controls,
+                      weights = "timepwt48",
+                      variables_to_remove = c("timepwt48", "outcome1990", "instrument2000"),
+                      "China column 6 spec")
 
-cl <- makeCluster(detectCores())
-registerDoParallel(cl)
 
 # "Using School Choice Lotteries to Test Measures of School Effectiveness" (Deming)
 
@@ -117,16 +135,43 @@ source("School Init.R")
 # (*) run_school_nciv() - which runs a permutations test (both lm and felm)
 source("School Run.R")
 
-# run potential IVS for lottery article
+# Deming - histogram of of permutation test
+# A - his instrument
+# B - our instrument (without home school)
+# C- pure lottery
+# Using the specification that he uses in the paper
 run_school_nciv(data= curr_cms, ivs= c("lottery", "lott_VA","new_lott_VA"),
-                iterations=1, permutations=5, ntree= 100,
+                                   controls_specifications = 3, #the specification 
+                                   #in the article
+                                   saveplot= T,
+                                   iterations=1, permutations=20, ntree= 100,
+                                   mtry_ratio= 1/3, OOB=T, randomize_lottery=F)
+
+
+
+# run potential IVS for lottery article
+#Tabe: Deming p-value
+# Rows: instruments (his IV, raw lottery results, corrected IV)
+# Cols: different controls (none, lottery fixed effects, home school) 
+
+school_p_values <- run_school_nciv(data= curr_cms, 
+                                   ivs= c("lottery", "lott_VA","new_lott_VA"),
+                controls_specifications = 1:4,
+                saveplot= F,
+                iterations=1, permutations=20, ntree= 100,
                 mtry_ratio= 1/3, OOB=T, randomize_lottery=F)
 
-#run sanity check (replace lottery with Bernoulli RV)
-# run_school_nciv(data= curr_cms, ivs= c("lottery"), iterations= 1,
-#                 permutations=20, ntree=20,
-#                 mtry_ratio= 1/3, OOB=T, randomize_lottery=T)
+full_file_name <-  file_full_path <- file.path("out", "school_p_values.csv")
+write.csv(school_p_values, full_file_name)
 
+#run sanity check (replace lottery with Bernoulli RV)
+run_school_nciv(data= curr_cms, ivs= c("lottery"),
+                controls_specifications = 1:4,
+                saveplot= F, iterations= 1,
+                permutations=20, ntree=20,
+                mtry_ratio= 1/3, OOB=T, randomize_lottery=T)
+
+run_school_variable_importance(curr_cms, c("lottery", "lott_VA","new_lott_VA"))
 
 # Simulations
 # this files file loads all the necessary functions for the simulations: Data generations, and benchmark
