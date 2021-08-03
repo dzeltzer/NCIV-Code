@@ -19,10 +19,85 @@ source("Load Libraries.R")
 # which get heteroscedasticity consistent estimates for linear model
 source("NCIV Main.R")
 
-#stopCluster(cl)
+stopCluster(cl)
 cl <- makeCluster(detectCores())
 registerDoParallel(cl)
 
+# Section 3 - Method
+# Simulation 1 - advantage in multi-variable setting
+# Y-axis: power (true negatives) 
+# X-avis: number of vars (For now: with increasing SNR , in the 
+# future with fixed signal to noise ratio) 
+# t-test for the (apriori) strongest candidate
+# t-test with Bonferroni correction for multiple hypothesis testing. 
+# F-test
+# SUR (explain why it’s not working)
+# RF
+# Simulation 2 - CES functions
+# X-axis: elasticity of substitution
+# Rest - the same
+
+
+# Simulations
+# this files file loads all the necessary functions for the simulations: Data generations, and benchmark
+# tests algorithms
+source("Data Generators.R")
+
+source("Benchmark Algorithms.R")
+
+source("Interactions Simulations.R")
+
+run_interactions_simulations(n_value= 200, number_of_all_ncs_value = 10,
+                             n_iterations = 5, n_permutations = 12,
+                             rejection_rate = 0.05,
+                             number_of_good_ncs_values = c(2, 3, 4),
+                             alpha_values = c(0, 1),
+                             single_nc_power = 0.5,
+                             ntree = 10)
+
+run_interactions_simulations(n_value= 200, number_of_all_ncs_value = 10,
+                             n_iterations = 5, n_permutations = 12,
+                             rejection_rate = 0.05,
+                             number_of_good_ncs_values = c(2, 3, 4),
+                             alpha_values = c(0, 1),
+                             single_nc_power = 0,
+                             ntree = 10)
+
+source("Degrees Simulations.R")
+
+run_degrees_simulations(n_value= 200, number_of_all_ncs_value = 10,
+                        n_iterations = 5, n_permutations = 12,
+                        rejection_rate = 0.05,
+                        number_of_good_ncs_values = c(2, 3, 4),
+                        alpha_values = c(0, 1),
+                        single_nc_power = 0.5,
+                        ntree = 10)
+
+run_degrees_simulations(n_value= 200, number_of_all_ncs_value = 10,
+                        n_iterations = 5, n_permutations = 12,
+                        rejection_rate = 0.05,
+                        number_of_good_ncs_values = c(2, 3, 4),
+                        alpha_values = c(0, 1),
+                        single_nc_power = 0,
+                        ntree = 10)
+
+source("CES Simulations.R")
+
+run_ces_simulations(n_value= 200, number_of_all_ncs_value = 10,
+                        n_iterations = 5, n_permutations = 12,
+                        rejection_rate = 0.05,
+                        number_of_good_ncs_values = c(2, 3, 4),
+                        rho_values = c(-100, 0, 0.5),
+                        single_nc_power = 0.5,
+                        ntree = 10)
+
+run_ces_simulations(n_value= 200, number_of_all_ncs_value = 10,
+                    n_iterations = 5, n_permutations = 12,
+                    rejection_rate = 0.05,
+                    number_of_good_ncs_values = c(2, 3, 4),
+                    rho_values = c(-100, 0, 0.5),
+                    single_nc_power = 0,
+                    ntree = 10)
 # Section 4 - Examples
 
 # The China Syndrome: Local Labor Market Effects of Import Competition in the
@@ -132,7 +207,11 @@ source("School Init.R")
 
 # This file consists the function that runs NCIV test for few potential IVs in Deming
 # sourcing the file will result in loading the following function:
-# (*) run_school_nciv() - which runs a permutations test (both lm and felm)
+# (1) run_school_nciv() - which runs a permutations test (both lm and felm)
+# (2) run_school_variable_importance() - which runs variable importance for 
+# the controls specification decalred in the article
+# As well as the inner function:
+# (*) prepare_school_data
 source("School Run.R")
 
 # Deming - histogram of of permutation test
@@ -165,38 +244,14 @@ full_file_name <-  file_full_path <- file.path("out", "school_p_values.csv")
 write.csv(school_p_values, full_file_name)
 
 #run sanity check (replace lottery with Bernoulli RV)
-run_school_nciv(data= curr_cms, ivs= c("lottery"),
-                controls_specifications = 1:4,
-                saveplot= F, iterations= 1,
-                permutations=20, ntree=20,
-                mtry_ratio= 1/3, OOB=T, randomize_lottery=T)
+# run_school_nciv(data= curr_cms, ivs= c("lottery"),
+#                 controls_specifications = 1:4,
+#                 saveplot= F, iterations= 1,
+#                 permutations=20, ntree=20,
+#                 mtry_ratio= 1/3, OOB=T, randomize_lottery=T)
 
 run_school_variable_importance(curr_cms, c("lottery", "lott_VA","new_lott_VA"))
 
-# Simulations
-# this files file loads all the necessary functions for the simulations: Data generations, and benchmark
-# tests algorithms
-source("Data Generators.R")
-
-source("Interactions Simulations.R")
-
-run_interactions_simulations(n_value= 200, number_of_all_ncs_value = 10,
-                             n_iterations = 2, n_permutations = 12,
-                             nc_power_value=1,rejection_rate = 0.05,
-                             number_of_good_ncs_values = c(2, 3),
-                             alpha_values = c(0, 1),
-                             singal_nc_power = 0.5,
-                             ntree = 10)
-
-source("Degrees Simulations.R")
-
-run_degrees_simulations(n_value= 200, number_of_all_ncs_value = 10,
-                        n_iterations = 2, n_permutations = 12,
-                        nc_power_value=1,rejection_rate = 0.05,
-                        number_of_good_ncs_values = c(2, 3),
-                        alpha_values = c(0, 1),
-                        singal_nc_power = 0.5,
-                        ntree = 10)
 
 
 

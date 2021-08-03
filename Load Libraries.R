@@ -10,6 +10,7 @@ library(tidyverse)
 library(rlang)
 library(lfe)
 library(stringr)
+library(plotly)
 
 #Data Generators.R
 library(systemfit)
