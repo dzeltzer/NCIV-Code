@@ -2,15 +2,18 @@ library(systemfit)
 
 # create a data frame with iv, treatment, unmeasured confounder and negative 
 # control variables where the unmeasured confounder affects the iv in 
-# a combination of linear and squared way
+# a combination of linear and squared way.
+# the negative control variable are associated linearly with the unmeasured confounder
 create_degree_nc <- function(n =100, # the number of observations in
                              # each iteration
                              sg =1, # the standard variation for the unmeasured confounder
                              sg_y= 1, # the standard variation for the outcome variable
                              inst.effect= 0.2, # the coefficient of the effect of the 
                              # instrumental variable on the treatment
-                             number_of_good_ncs= 5, 
-                             number_of_bad_ncs = 50,
+                             number_of_good_ncs= 5, # The number of negative control 
+                             # variable associated with the unmeasured confounder
+                             number_of_bad_ncs = 50, # The number of independent variables 
+                             # in the data frame which are not associated with either unmeasured confounder
                              nc_power=1, # the sum of coefficient of the effect of the
                              # unmeasured confounder on the negative control variables
                              nc_power_split= "uniform", # the distribution of the effects 
@@ -55,14 +58,19 @@ create_degree_nc <- function(n =100, # the number of observations in
 # create a data frame with iv, treatment, 2 unmeasured confounders and negative 
 # control variables where the unmeasured confounder affects the iv in 
 # a combination of linear and interaction between the two unmeasured confounders
+# the negative control variable are associated linearly with the unmeasured confounder
 create_interactions_multi_nc <- function(n =100,# the number of observations in
                                          # each iteration
                                          sg =1, # the standard variation for the unmeasured confounder
                                          sg_y= 1, # the standard variation for the outcome variable
                                          inst.effect= 0.2, # the coefficient of the effect of the 
                                          # instrumental variable on the treatment
-                                         number_of_good_ncs= 5, 
-                                         number_of_bad_ncs = 50,
+                                         number_of_first_good_ncs= 5, # The number of negative control 
+                                         # variable associated with the first unmeasured confounder
+                                         number_of_second_good_ncs= 5, # The number of negative control 
+                                         # variable associated with the second unmeasured confounder
+                                         number_of_bad_ncs = 50, # The number of independent variables 
+                                         # in the data frame which are not associated with either unmeasured confounder
                                          nc_power=1, # the sum of coefficient of the effect of the
                                          # unmeasured confounder on the negative control variables
                                          nc_power_split= "uniform", # the distribution of the effects 
@@ -112,14 +120,19 @@ get_nc_col <- function(nc_power_for_single_nc, h, n, sg){
 # create a data frame with iv, treatment, unmeasured confounder and negative 
 # control variables where the unmeasured confounder affects the iv in 
 # as an output of a simplified CES function
+# the negative control variable are associated linearly with the unmeasured confounder
 create_ces_nc <- function(n =100,# the number of observations in
                           # each iteration
                           sg =1, # the standard variation for the unmeasured confounder
                           sg_y= 1, # the standard variation for the outcome variable
                           inst.effect= 0.2, # the coefficient of the effect of the 
                           # instrumental variable on the treatment
-                          number_of_good_ncs= 5, 
-                          number_of_bad_ncs = 50,
+                          number_of_first_good_ncs= 5, # The number of negative control 
+                          # variable associated with the first unmeasured confounder
+                          number_of_second_good_ncs= 5, # The number of negative control 
+                          # variable associated with the second unmeasured confounder 
+                          number_of_bad_ncs = 50, # The number of independent variables 
+                          # in the data frame which are not associated with either unmeasured confounder
                           nc_power=1, # the sum of coefficient of the effect of the
                           # unmeasured confounder on the negative control variables
                           nc_power_split= "uniform", # the distribution of the effects 
