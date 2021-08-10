@@ -19,7 +19,7 @@ source("Load Libraries.R")
 # which get heteroscedasticity consistent estimates for linear model
 source("NCIV Main.R")
 
-stopCluster(cl)
+#stopCluster(cl)
 cl <- makeCluster(detectCores())
 registerDoParallel(cl)
 
@@ -39,12 +39,28 @@ registerDoParallel(cl)
 
 
 # Simulations
-# this files file loads all the necessary functions for the simulations: Data generations, and benchmark
-# tests algorithms
+# this file loads all the necessary functions for the simulations: Data generations.
+# sourcing the file will load the main functions:
+# create_degree_nc()- creates a data frame scenario where the relation between 
+# the unmeasured confounder and the IV is addition of linear and squared 
+# create_interactions_multi_nc() - creates a data frame scenario where the 
+# there are two unmeasured confounders that there interaction is correlated 
+# with the IV
+# create_ces_nc() - creates a data frame scenario where the relation between 
+# the unmeasured confounders and the IV is via CES functions
+# prepare_simulations_results() - convert data from foreach output to readable 
+# simulations results 
 source("Data Generators.R")
 
+# this file loads benchmark tests algorithms
+# get_oracle_p_val() - the theoretical best algorithm  
+# get_min_p_val() - using Bonferroni correction 
+# get_sur_p_val() - Using SUR (Seemingly Unrelated Regression)
+# get_f_p_val() - Using F-test
 source("Benchmark Algorithms.R")
 
+# this file loads run_interactions_simulations() which runs simulations scenario
+# for interactions
 source("Interactions Simulations.R")
 
 run_interactions_simulations(n_value= 200, number_of_all_ncs_value = 10,
@@ -63,6 +79,8 @@ run_interactions_simulations(n_value= 200, number_of_all_ncs_value = 10,
                              single_nc_power = 0,
                              ntree = 10)
 
+# this file loads run_degrees_simulations() which runs simulations scenario
+# for degrees
 source("Degrees Simulations.R")
 
 run_degrees_simulations(n_value= 200, number_of_all_ncs_value = 10,
@@ -81,6 +99,8 @@ run_degrees_simulations(n_value= 200, number_of_all_ncs_value = 10,
                         single_nc_power = 0,
                         ntree = 10)
 
+# this file loads run_ces_simulations() which runs simulations scenario
+# with CES functions
 source("CES Simulations.R")
 
 run_ces_simulations(n_value= 200, number_of_all_ncs_value = 10,

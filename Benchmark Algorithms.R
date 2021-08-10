@@ -1,5 +1,9 @@
-
-get_oracle_p_val <- function(data, number_of_good_ncs, number_of_bad_ncs){
+# return the p-value of F-test of iv = a_1*NC_1 + ... a_k*NC_k
+# when the good NCs are known in advance
+get_oracle_p_val <- function(data,  # data frame with iv and ncs
+                             number_of_good_ncs,
+                             number_of_bad_ncs
+                             ){
   controls <- paste0("good_nc", 1:number_of_good_ncs)
   s1 <- as.formula(sprintf("iv ~ %s", paste(controls, collapse="+")))
   nc_fit <- summary(lm(data = data, formula = s1))
@@ -7,6 +11,8 @@ get_oracle_p_val <- function(data, number_of_good_ncs, number_of_bad_ncs){
   
 }
 
+# return the p-value of F-test of iv = a_1*NC_1 + ... a_k*NC_k
+# when we don't have additional knowledge
 get_f_p_val <- function(data, number_of_good_ncs, number_of_bad_ncs){
   controls <- paste0("good_nc", 1:number_of_good_ncs)
   if (number_of_bad_ncs > 0){
@@ -19,6 +25,7 @@ get_f_p_val <- function(data, number_of_good_ncs, number_of_bad_ncs){
   return(pf(nc_fit$fstatistic[1],nc_fit$fstatistic[2],nc_fit$fstatistic[3],lower.tail=FALSE))
   
 }
+
 
 get_sur_p_val <- function(data, number_of_good_ncs, number_of_bad_ncs){
   
@@ -35,6 +42,8 @@ get_sur_p_val <- function(data, number_of_good_ncs, number_of_bad_ncs){
   
 }
 
+# return the minimum p-value of the tests iv = a_i*NC_i (for all i)
+# when we don't have additional knowledge
 get_min_p_val <- function(data, number_of_good_ncs, number_of_bad_ncs){
   min_good <- min_bad <- 1
   if(number_of_good_ncs >0){
@@ -60,8 +69,5 @@ get_min_p_val <- function(data, number_of_good_ncs, number_of_bad_ncs){
               
             })
   }
-  
-  
   return(min(min_good, min_bad))
-  
 }

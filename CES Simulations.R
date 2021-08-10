@@ -1,8 +1,35 @@
-
-run_ces_simulations <- function(n_value, number_of_all_ncs_value, n_iterations,
-                                    n_permutations, rejection_rate,
-                                    number_of_good_ncs_values, rho_values,
-                                    single_nc_power, ntree) {
+# A simplifed version of CES function as describrd in 
+# https://en.wikipedia.org/wiki/Constant_elasticity_of_substitution
+# Q = (K^rho + L^rho)^(1/rho)
+# where rho in [-inf, 1]
+# when rho == inf -> CES(K, L) = MIN(K,L)
+# when rho == 0 -> CES(K,L) = Const
+# when rho == 1 -> CES(K, L) = K + L
+run_ces_simulations <- function(n_value,# the number of observations in
+                                # each iteration
+                                number_of_all_ncs_value, # the number of 
+                                # all variables in the output data frame
+                                n_iterations, # the number iterations done
+                                # in the simulations for each hyper parameters
+                                # specification (number_of_good_ncs_values and 
+                                # alpha_values). In each iteration we create a 
+                                # simulated data frame, try different algorithms
+                                # for NCIV test.
+                                n_permutations, # the number of permutations
+                                # in the the permutations tests (RF, Bagging)
+                                # for each iteration
+                                rejection_rate, # the rejection threshold rate that we 
+                                # reject the null
+                                number_of_good_ncs_values, # hyper parameter: vector of
+                                # number of negative control variables (out 
+                                # of number_of_all_ncs_value)
+                                rho_values, # hyper parameters: a vector of rho - the value
+                                # that determine the shape of CES function (desrtibed above)
+                                single_nc_power, # the coefficient of the effect of
+                                # the unmeasured confounder on the negative controls
+                                ntree # the number of trees in the RF prediction
+                                # algorithm used for NCIV test
+                                ) {
   sg_y <- sg <- 1
   
   # Single lm p-val approach

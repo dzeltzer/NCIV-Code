@@ -1,4 +1,4 @@
-#NCIV MAin.R
+#NCIV Main.R
 library(foreach)
 library(doParallel)
 library(car)
