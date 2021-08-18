@@ -216,12 +216,12 @@ prepare_school_data <- function(data, model, relevant_cols, prev_yr, ivs, random
     data[data$lottery == 1,][,sprintf("ch1_mod%smix_%s_test", model, prev_yr)]
   
   
-  all_controls <- c("math_1998_imp", "math_1998_miss",# "math_1998_imp_sq", "math_1998_imp_cub",       
-                    "read_1998_imp", "read_1998_miss",# "read_1998_imp_sq", "read_1998_imp_cub",       
-                    "math_1999_imp", "math_1999_miss",# "math_1999_imp_sq", "math_1999_imp_cub",       
-                    "read_1999_imp", "read_1999_miss",# "read_1999_imp_sq", "read_1999_imp_cub",       
-                    "math_2000_imp", "math_2000_miss",# "math_2000_imp_sq", "math_2000_imp_cub",       
-                    "read_2000_imp", "read_2000_miss",# "read_2000_imp_sq", "read_2000_imp_cub",       
+  all_controls <- c(#"math_1998_imp", "math_1998_miss",# "math_1998_imp_sq", "math_1998_imp_cub",       
+                    #"read_1998_imp", "read_1998_miss",# "read_1998_imp_sq", "read_1998_imp_cub",       
+                    #"math_1999_imp", "math_1999_miss",# "math_1999_imp_sq", "math_1999_imp_cub",       
+                    #"read_1999_imp", "read_1999_miss",# "read_1999_imp_sq", "read_1999_imp_cub",       
+                    #"math_2000_imp", "math_2000_miss",# "math_2000_imp_sq", "math_2000_imp_cub",       
+                    #"read_2000_imp", "read_2000_miss",# "read_2000_imp_sq", "read_2000_imp_cub",       
                     "math_2001_imp", "math_2001_miss",# "math_2001_imp_sq", "math_2001_imp_cub",       
                     "read_2001_imp", "read_2001_miss"# , "read_2001_imp_sq", "read_2001_imp_cub"
   )
