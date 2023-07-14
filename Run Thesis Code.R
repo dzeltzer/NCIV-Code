@@ -1,278 +1,386 @@
-set.seed(12345)
 
-# Loads the necessary libraries for the whole project. You can open the file 
-# and see whether you need to install some libraries
-source("Load Libraries.R")
+run_interactions_simulations <- function(n_observations, # the number of observations in
+                                         # each iteration
+                                         number_of_all_ncs_value, # the number of 
+                                         # all variables in the output data frame
+                                         n_iterations, # the number iterations done
+                                         # in the simulations for each hyper parameters
+                                         # specification (number_of_good_ncs_values and 
+                                         # alpha_values). In each iteration we create a 
+                                         # simulated data frame, try different algorithms
+                                         # for NCIV test.
+                                         n_permutations, # the number of permutations
+                                         # in the the permutations tests (RF, Bagging)
+                                         # for each iteration
+                                         rejection_rate, # the rejection threshold rate that we 
+                                         # reject the null
+                                         number_of_good_ncs_values, # hyper parameter: vector of
+                                         # number of negative control variables (out 
+                                         # of number_of_all_ncs_value) - HAS TO BE > 1
+                                         alpha_values, # hyper parameter: vector of
+                                         # alpha - the fraction of the linear effect of the unmeasured
+                                         # confounder on the negative control variables. when alpha=1
+                                         # there is only linear effect, when alpha=0 there is only
+                                         # effect by the interactions of two unmeasured confounder
+                                         single_nc_power, # the coefficient of the effect of
+                                         # the unmeasured confounder on the negative controls
+                                         sg = 1, # the noise in the system
+                                         constant_snr_sg_mat = NULL, # if needed - a matrix of sg
+                                         # for keeping constant SNR,
+                                         ntree, # the number of trees in the RF prediction
+                                         # algorithm used for NCIV test
+                                         is_null_scenario
+                                         ) {
+  sg_y <- sg 
+  
+  # Single lm p-val approach
+  start_scenario_time <- start_time <- Sys.time()
+  
+  i <- 0
+  results_bonf_raw <-  foreach (curr_alpha = alpha_values, 
+                                .packages = c("dplyr","foreach"),
+                                .export = c("get_min_p_val", "create_interactions_multi_nc", "get_nc_col"),
+                                .combine ="rbind") %do% {
+                                  i <- i+1
+                                  j <- 0
+                                  
+                                  foreach (curr_n_number_of_good_ncs_value = number_of_good_ncs_values,
+                                           .packages = c("dplyr","foreach"),
+                                           .export = c("get_min_p_val", "create_interactions_multi_nc", "get_nc_col"),
+                                           .combine ="cbind") %do% {
+                                             j <- j+ 1
+                                             if (!(is.null(constant_snr_sg_mat)))
+                                             {
+                                               sg <- constant_snr_sg_mat[i,j]
+                                             }
+                                             mean(
+                                               foreach (curr_iter = 1:n_iterations,
+                                                        .packages = c("dplyr","foreach"),
+                                                        .export = c("get_min_p_val", "create_interactions_multi_nc", "get_nc_col"),
+                                                        .combine ="cbind") %dopar% 
+                                                 {
+                                                   get_min_p_val(data= 
+                                                                   create_interactions_multi_nc(n= n_observations, 
+                                                                                                sg= sg,
+                                                                                                nc_power=single_nc_power*curr_n_number_of_good_ncs_value, 
+                                                                                                nc_power_split="uniform", 
+                                                                                                number_of_first_good_ncs = curr_n_number_of_good_ncs_value,
+                                                                                                number_of_second_good_ncs = curr_n_number_of_good_ncs_value,
+                                                                                                number_of_bad_ncs = number_of_all_ncs_value- 2*curr_n_number_of_good_ncs_value,
+                                                                                                alpha= curr_alpha,
+                                                                                                is_null_scenario = is_null_scenario),
+                                                                 number_of_good_ncs = 2*curr_n_number_of_good_ncs_value,
+                                                                 number_of_bad_ncs = number_of_all_ncs_value- 2*curr_n_number_of_good_ncs_value) < (rejection_rate/number_of_all_ncs_value)
+                                                 }
+                                             )
+                                           }
+                                }
+  
+  print(sprintf("Bonf: Done %s iterations of curr_number_of_good_nc_value=%s from(%s) singal_nc_power=%s curr_alpha=%s at %s",
+                n_iterations, toString(number_of_good_ncs_values), number_of_all_ncs_value, single_nc_power,  toString(alpha_values), Sys.time()))   
+  print( Sys.time() - start_time)
 
-# This file contains all the necessary functions for the NCIV approach
-# sourcing the file will load the main functions:
-# (1) permutations.test.for.felm
-# (2) permutations.test.for.lm
-# which perform a NCIV permutations test
-# and the corresponding inner functions:
-# run.rf.multiple.negative.controls (inner functions of )
-# get_NC_matrix_felm
-# get_NC_matrix
-# calculate.visualize.p.values
-# as well as:
-# (3) get_stata_coef 
-# which get heteroscedasticity consistent estimates for linear model
-source("NCIV Main.R")
+  columns <- c("Scenario", "Algorithm", "n_observations", "number_of_all_ncs_value", "n_iterations",
+               "n_permutations", "number_of_good_ncs_value", "alpha_value",
+               "single_nc_power", "ntree", "rejection rate")
+  
+  results_bonf <- prepare_simulations_results(results_bonf_raw, columns,
+                                                    "Interactions", "Bonf", 
+                              single_nc_power, alpha_values,
+                              number_of_good_ncs_values, n_observations,
+                              number_of_all_ncs_value, n_iterations,
+                              n_permutations, ntree,
+                              is_null_scenario,
+                              sg,
+                              constant_snr_sg_mat)
 
-#stopCluster(cl)
-cl <- makeCluster(detectCores())
-registerDoParallel(cl)
+  print(results_bonf)
+  
+  
+  # F-test 
+  start_time <- Sys.time()
+  i <- 0
+  results_f_test_raw <- foreach (curr_alpha = alpha_values, 
+                             .packages = c("dplyr","foreach"),
+                             .export = c("get_f_p_val", "create_interactions_multi_nc", "get_nc_col"),
+                             .combine ="rbind") %do% {
+                               i <- i+1
+                               j <- 0
+                            foreach (curr_n_number_of_good_ncs_value = number_of_good_ncs_values,
+                                     .packages = c("dplyr","foreach"),
+                                     .export = c("get_f_p_val", "create_interactions_multi_nc", "get_nc_col"),
+                                     .combine ="cbind") %do% {
+                                       j <- j+ 1
+                                       if (!(is.null(constant_snr_sg_mat)))
+                                       {
+                                         sg <- constant_snr_sg_mat[i,j]
+                                       }
+                                      good_nc_number_iteration_results <-  foreach (curr_iter = 1:n_iterations,
+                                                             .packages = c("dplyr","foreach"),
+                                                             .export = c("get_f_p_val", "create_interactions_multi_nc", "get_nc_col"),
+                                                             .combine ="cbind") %dopar% 
+                                             {
+                                               get_f_p_val(data= create_interactions_multi_nc(n= n_observations,
+                                                                                              sg= sg,
+                                                                                              nc_power=single_nc_power*curr_n_number_of_good_ncs_value, nc_power_split="uniform", 
+                                                                                              number_of_first_good_ncs = curr_n_number_of_good_ncs_value,
+                                                                                              number_of_second_good_ncs = curr_n_number_of_good_ncs_value,
+                                                                                              number_of_bad_ncs = number_of_all_ncs_value- 2*curr_n_number_of_good_ncs_value,
+                                                                                              alpha= curr_alpha,
+                                                                                              is_null_scenario = is_null_scenario),
+                                                           number_of_good_ncs = 2* curr_n_number_of_good_ncs_value,
+                                                           number_of_bad_ncs = number_of_all_ncs_value- 2*curr_n_number_of_good_ncs_value) < (rejection_rate)
+                                             }
+                                  mean(good_nc_number_iteration_results)
+             }
+  }
+  print(sprintf("F-test: Done %s iterations of curr_number_of_good_nc_value=%s from(%s) singal_nc_power=%s curr_alpha=%s at %s",
+                n_iterations, toString(number_of_good_ncs_values), number_of_all_ncs_value, single_nc_power,  toString(alpha_values), Sys.time()))    
+  print( Sys.time() - start_time)
+  
+  results_f_test <- prepare_simulations_results(results_f_test_raw, columns,
+                                                    "Interactions", "F test", 
+                                                    single_nc_power, alpha_values,
+                                                    number_of_good_ncs_values, n_observations,
+                                                    number_of_all_ncs_value, n_iterations,
+                                                    n_permutations, 
+                                                    ntree,
+                                                    is_null_scenario,
+                                                    sg,
+                                                    constant_snr_sg_mat)
+  
+  print(results_f_test)
 
-# Section 3 - Method
-# Simulation 1 - advantage in multi-variable setting
-# Y-axis: power (true negatives) 
-# X-avis: number of vars (For now: with increasing SNR , in the 
-# future with fixed signal to noise ratio) 
-# t-test for the (apriori) strongest candidate
-# t-test with Bonferroni correction for multiple hypothesis testing. 
-# F-test
-# SUR (explain why it’s not working)
-# RF
-# Simulation 2 - CES functions
-# X-axis: elasticity of substitution
-# Rest - the same
+  # SUR test
+  start_time <- Sys.time()
+  i <- 0
+  results_sur_raw <-   foreach (curr_alpha = alpha_values,
+                                        .packages = c("dplyr","foreach", "systemfit"),
+                                        .export = c("get_sur_p_val","create_interactions_multi_nc", "get_nc_col"),
+                                        .combine ="rbind") %do% {
+                                          i <- i+1
+                                          j <- 0
+                                          foreach (curr_n_number_of_good_ncs_value = number_of_good_ncs_values,
+                                                   .packages = c("dplyr","foreach", "systemfit"),
+                                                   .export = c("get_sur_p_val","get_NC_matrix","prepare_z_NC", "calculate.visualize.p.values","create_interactions_multi_nc", "get_nc_col"),
+                                                   .combine ="cbind") %do%
+                                            {
+                                              j <- j+ 1
+                                              if (!(is.null(constant_snr_sg_mat)))
+                                              {
+                                                sg <- constant_snr_sg_mat[i,j]
+                                              }
+                                              good_nc_number_iteration_results <- 
+                                                foreach (curr_iter = 1:n_iterations,
+                                                         .packages = c("dplyr","foreach", "systemfit"),
+                                                         .export = c("get_sur_p_val","get_NC_matrix","prepare_z_NC", "calculate.visualize.p.values","create_interactions_multi_nc", "get_nc_col"),
+                                                         .combine ="cbind") %dopar% 
+                                                {
+                                                  (get_sur_p_val(data= create_interactions_multi_nc(n= n_observations,
+                                                                                                    sg= sg,
+                                                                                                    nc_power=single_nc_power*curr_n_number_of_good_ncs_value, nc_power_split="uniform", 
+                                                                                                               number_of_first_good_ncs = curr_n_number_of_good_ncs_value,
+                                                                                                               number_of_second_good_ncs = curr_n_number_of_good_ncs_value,
+                                                                                                               number_of_bad_ncs = number_of_all_ncs_value- 2*curr_n_number_of_good_ncs_value,
+                                                                                                               alpha= curr_alpha,
+                                                                                                    is_null_scenario = is_null_scenario),
+                                                                 curr_n_number_of_good_ncs_value, number_of_all_ncs_value- 2*curr_n_number_of_good_ncs_value) <= rejection_rate)
+                                                }
+                                              print(sprintf("SUR: Done %s iterations of curr_number_of_good_nc_value=%s from(%s) sg %s singal_nc_power=%s curr_alpha=%s at %s",
+                                                            n_iterations, curr_n_number_of_good_ncs_value, number_of_all_ncs_value, sg, single_nc_power, curr_alpha, Sys.time()))
+                                              print(c(mean(good_nc_number_iteration_results), sd(good_nc_number_iteration_results)))
+                                              mean(good_nc_number_iteration_results)
+                                            }
+                                        }
+  print( Sys.time() - start_time)
 
+  results_sur <- prepare_simulations_results(results_sur_raw, columns,
+                                                      "Interactions", "SUR", 
+                                                      single_nc_power, alpha_values,
+                                                      number_of_good_ncs_values, n_observations,
+                                                      number_of_all_ncs_value, n_iterations,
+                                                      n_permutations, ntree,
+                                                     is_null_scenario,
+                                                     sg,
+                                                     constant_snr_sg_mat)
+  
+  print(results_sur)
+  
+  # RF test
+  start_time <- Sys.time()
+  i <- 0
+  results_rf_raw <-   foreach (curr_alpha = alpha_values,
+                                        .packages = c("dplyr","foreach"),
+                                        .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC", "calculate.visualize.p.values","create_interactions_multi_nc", "get_nc_col"),
+                                        .combine ="rbind") %do% {
+                                          i <- i+1
+                                          j <- 0
+    foreach (curr_n_number_of_good_ncs_value = number_of_good_ncs_values,
+             .packages = c("dplyr","foreach"),
+             .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC", "calculate.visualize.p.values","create_interactions_multi_nc", "get_nc_col"),
+             .combine ="cbind") %do%
+      {
+        j <- j+ 1
+        if (!(is.null(constant_snr_sg_mat)))
+        {
+          sg <- constant_snr_sg_mat[i,j]
+        }
+        good_nc_number_iteration_results <- 
+          foreach (curr_iter = 1:n_iterations,
+                   .packages = c("dplyr","foreach"),
+                   .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC", "calculate.visualize.p.values","create_interactions_multi_nc", "get_nc_col"),
+                   .combine ="cbind") %dopar% 
+          {
+            (permutations.test.for.lm(data= create_interactions_multi_nc(n= n_observations, 
+                                                                         sg= sg,
+                                                                         nc_power=single_nc_power*curr_n_number_of_good_ncs_value, nc_power_split="uniform", 
+                                                                         number_of_first_good_ncs = curr_n_number_of_good_ncs_value,
+                                                                         number_of_second_good_ncs = curr_n_number_of_good_ncs_value,
+                                                                         number_of_bad_ncs = number_of_all_ncs_value- 2*curr_n_number_of_good_ncs_value,
+                                                                         alpha= curr_alpha,
+                                                                         is_null_scenario = is_null_scenario),
+                                      instrument_form= "iv",
+                                      instrument= "iv", 
+                                      controls= c("t"),
+                                      weights= NULL, variables_to_remove= c("h1","h2", "y", "iv"),
+                                      title = "Simulation bad NC", n_permutations= n_permutations, 
+                                      conditioned = T, OOB= T, saveplot=F,
+                                      mtry_ratio= 1/3, ntree=ntree) <= rejection_rate)
+          }
+        print(sprintf("RF: Done %s iterations of curr_number_of_good_nc_value=%s from(%s)  singal_nc_power=%s curr_alpha=%s at %s",
+                      n_iterations, curr_n_number_of_good_ncs_value, number_of_all_ncs_value, single_nc_power, curr_alpha, Sys.time()))
+        print(c(mean(good_nc_number_iteration_results), sd(good_nc_number_iteration_results)))
+        mean(good_nc_number_iteration_results)
+      }
+  }
+  print( Sys.time() - start_time)
+  
+  results_rf <- prepare_simulations_results(results_rf_raw, columns,
+                                             "Interactions", "RF", 
+                                             single_nc_power, alpha_values,
+                                             number_of_good_ncs_values, n_observations,
+                                             number_of_all_ncs_value, n_iterations,
+                                             n_permutations,
+                                            ntree,
+                                            is_null_scenario,
+                                            sg,
+                                            constant_snr_sg_mat)
+  print(results_rf)
 
-# Simulations
-# this file loads all the necessary functions for the simulations: Data generations.
-# sourcing the file will load the main functions:
-# create_degree_nc()- creates a data frame scenario where the relation between 
-# the unmeasured confounder and the IV is addition of linear and squared 
-# create_interactions_multi_nc() - creates a data frame scenario where the 
-# there are two unmeasured confounders that there interaction is correlated 
-# with the IV
-# create_ces_nc() - creates a data frame scenario where the relation between 
-# the unmeasured confounders and the IV is via CES functions
-# prepare_simulations_results() - convert data from foreach output to readable 
-# simulations results 
-source("Data Generators.R")
+  # Bagging
+  start_time <- Sys.time()
+  i <- 0
+  results_bag_raw <-   foreach (curr_alpha = alpha_values,
+                                         .packages = c("dplyr","foreach"),
+                                         .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC", "calculate.visualize.p.values","create_interactions_multi_nc", "get_nc_col"),
+                                         .combine ="rbind") %do% {
+                                           i <- i+1
+                                           j <- 0
+    foreach (curr_n_number_of_good_ncs_value = number_of_good_ncs_values,
+             .packages = c("dplyr","foreach"),
+             .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC", "calculate.visualize.p.values","create_interactions_multi_nc", "get_nc_col"),
+             .combine ="cbind") %do%
+      {
+        j <- j+ 1
+        if (!(is.null(constant_snr_sg_mat)))
+        {
+          sg <- constant_snr_sg_mat[i,j]
+        }
+        good_nc_number_iteration_results <- 
+          foreach (curr_iter = 1:n_iterations,
+                   .packages = c("dplyr","foreach"),
+                   .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC", "calculate.visualize.p.values","create_interactions_multi_nc", "get_nc_col"),
+                   .combine ="cbind") %dopar% 
+          {
+            (permutations.test.for.lm(data= create_interactions_multi_nc(n= n_observations, 
+                                                                         sg= sg,
+                                                                         nc_power=single_nc_power*curr_n_number_of_good_ncs_value, nc_power_split="uniform", 
+                                                                         number_of_first_good_ncs = curr_n_number_of_good_ncs_value,
+                                                                         number_of_second_good_ncs = curr_n_number_of_good_ncs_value,
+                                                                         number_of_bad_ncs = number_of_all_ncs_value- 2*curr_n_number_of_good_ncs_value,
+                                                                         alpha= curr_alpha,
+                                                                         is_null_scenario = is_null_scenario),
+                                      instrument_form= "iv",
+                                      instrument= "iv", 
+                                      controls= c("t"),
+                                      weights= NULL, variables_to_remove= c("h1","h2", "y", "iv"),
+                                      title = "Simulation bad NC", n_permutations= n_permutations, 
+                                      conditioned = T, OOB= T, saveplot=F,
+                                      mtry_ratio= 1, ntree=ntree) <= rejection_rate)
+          }
+        print(sprintf("BAG: Done %s iterations of curr_number_of_good_nc_value=%s from(%s) singal_nc_power=%s curr_alpha=%s at %s",
+                      n_iterations, curr_n_number_of_good_ncs_value, number_of_all_ncs_value, single_nc_power, curr_alpha, Sys.time()))
+        print(c(mean(good_nc_number_iteration_results), sd(good_nc_number_iteration_results)))
+        mean(good_nc_number_iteration_results)#c(mean(good_nc_number_iteration_results), sd(good_nc_number_iteration_results))
+        
+      }
+  }
+  print( Sys.time() - start_time)
+  results_bag <- prepare_simulations_results(results_bag_raw, columns,
+                                            "Interactions", "Bagging", 
+                                            single_nc_power, alpha_values,
+                                            number_of_good_ncs_values, n_observations,
+                                            number_of_all_ncs_value, n_iterations,
+                                            n_permutations, ntree,
+                                            is_null_scenario,
+                                            sg,
+                                            constant_snr_sg_mat) 
+  
+  print(results_bag)
+  
+  results <- rbind(results_bonf,
+                 results_f_test, 
+                 results_sur,
+                 results_rf,
+                 results_bag)
+  
+  file_full_path <- file.path("out", paste("Simulations Iteractions", gsub("[:]", " ",Sys.time())))
+  write.csv(results, sprintf("%s.csv", file_full_path))
+  
 
-# this file loads benchmark tests algorithms
-# get_oracle_p_val() - the theoretical best algorithm  
-# get_min_p_val() - using Bonferroni correction 
-# get_sur_p_val() - Using SUR (Seemingly Unrelated Regression)
-# get_f_p_val() - Using F-test
-source("Benchmark Algorithms.R")
+  print(sprintf("Scenario Interactions is done at %s. Run for: ", Sys.time()))
+  print(Sys.time() - start_scenario_time)
+  
+  return(results)
+}
 
-# this file loads run_interactions_simulations() which runs simulations scenario
-# for interactions
-source("Interactions Simulations.R")
-
-run_interactions_simulations(n_value= 200, number_of_all_ncs_value = 10,
-                             n_iterations = 5, n_permutations = 12,
-                             rejection_rate = 0.05,
-                             number_of_good_ncs_values = c(2, 3, 4),
-                             alpha_values = c(0, 1),
-                             single_nc_power = 0.5,
-                             ntree = 10)
-
-run_interactions_simulations(n_value= 200, number_of_all_ncs_value = 10,
-                             n_iterations = 5, n_permutations = 12,
-                             rejection_rate = 0.05,
-                             number_of_good_ncs_values = c(2, 3, 4),
-                             alpha_values = c(0, 1),
-                             single_nc_power = 0,
-                             ntree = 10)
-
-# this file loads run_degrees_simulations() which runs simulations scenario
-# for degrees
-source("Degrees Simulations.R")
-
-run_degrees_simulations(n_value= 200, number_of_all_ncs_value = 10,
-                        n_iterations = 5, n_permutations = 12,
-                        rejection_rate = 0.05,
-                        number_of_good_ncs_values = c(2, 3, 4),
-                        alpha_values = c(0, 1),
-                        single_nc_power = 0.5,
-                        ntree = 10)
-
-run_degrees_simulations(n_value= 200, number_of_all_ncs_value = 10,
-                        n_iterations = 5, n_permutations = 12,
-                        rejection_rate = 0.05,
-                        number_of_good_ncs_values = c(2, 3, 4),
-                        alpha_values = c(0, 1),
-                        single_nc_power = 0,
-                        ntree = 10)
-
-# this file loads run_ces_simulations() which runs simulations scenario
-# with CES functions
-source("CES Simulations.R")
-
-run_ces_simulations(n_value= 200, number_of_all_ncs_value = 10,
-                        n_iterations = 5, n_permutations = 12,
-                        rejection_rate = 0.05,
-                        number_of_good_ncs_values = c(2, 3, 4),
-                        rho_values = c(-100, 0, 0.5),
-                        single_nc_power = 0.5,
-                        ntree = 10)
-
-run_ces_simulations(n_value= 200, number_of_all_ncs_value = 10,
-                    n_iterations = 5, n_permutations = 12,
-                    rejection_rate = 0.05,
-                    number_of_good_ncs_values = c(2, 3, 4),
-                    rho_values = c(-100, 0, 0.5),
-                    single_nc_power = 0,
-                    ntree = 10)
-# Section 4 - Examples
-
-# The China Syndrome: Local Labor Market Effects of Import Competition in the
-# United States (Autor, Dorn, and Hanson)
-
-# This file loads all the necessary data functions, and variables groups for China article
-# sourcing this will result in loading the main functions:
-# (1) get_formula_for_table_3() 
-# which creates the formula for replicating table 3 in the article
-# as well as loading:
-# (1) workfile_china
-# basic data set used for replicating table 3 in the article
-# (2) china_1990
-# data set with only 1990 data with all available negative controls
-# (3) china_1990_only_org_nc
-# data set with only 1990 data with only the negative control used in the
-# article - the outcome in 2000
-# (4) col_2_controls - col_4_controls, location_controls, man_controls ...
-# different groups of controls
-source("China Init.R")
-
-# This file loads all the necessary functions that runs replication of table 3,
-# and NCIV test for China article
-# sourcing this will result in loading the main functions:
-# (1) replicate_table_3()
-# (2) run_china_nciv() - runs 5 different controls specifications of NCIV
-#     test on the IV (delta trade to other states)
-source("China Run.R")
-
-
-replicate_table_3(workfile_china, col_2_controls, col_3_controls,
-                  col_4_controls, col_5_controls, col_6_controls, G, N)
-
-# Autor - distribution of permutation test 
-# Full specification - column 6
-
-permutations.test.for.lm(data= china_1990, instrument_form= "instrument2000",
-                         instrument= "instrument2000",
-                         controls= col_6_controls[2:length(col_6_controls)],
-                         weights="timepwt48",
-                         variables_to_remove= c("timepwt48", "instrument2000", "outcome2000"),
-                         title = "China column 6", n_permutations= 100,
-                         conditioned = T, OOB= T, saveplot=T,
-                         mtry_ratio=1/3, ntree=100)
-
-# Table: Autor p values
-# Rows: using only their negative control, using all negative controls
-# Cols: different controls as in the paper
-
-# run NCIV test for the IV used in China article with all the available NC 
-china_all_ncs_p_values <- run_china_nciv(data= china_1990, 
-              instrument_form= "instrument2000",instrument= "instrument2000",
-              col_2_controls= col_2_controls, col_3_controls= col_3_controls,
-              col_4_controls= col_4_controls,col_5_controls= col_5_controls,
-              col_6_controls= col_6_controls, weights= "timepwt48", 
-               variables_to_remove= c("timepwt48", "instrument2000", "outcome2000"),
-               permutations= 100, OOB= T, mtry_ratio= 1/3, ntree= 100, title= "China",
-              saveplot= F)
-
-
-# outcome1990 is the only NC for the original NC test used in the article in 
-# our interpretation. Run NCIV test for when the only NC is the outcome1990
-china_original_nc_only_p_values <- run_china_nciv(data= china_1990_only_org_nc, instrument_form= "instrument2000",
-               instrument= "instrument2000", col_2_controls= col_2_controls,
-               col_3_controls= col_3_controls, col_4_controls= col_4_controls,
-               col_5_controls= col_5_controls, col_6_controls= col_6_controls,
-               weights= "timepwt48", 
-               variables_to_remove= c("timepwt48", "instrument2000"),
-               permutations= 50, OOB= T, mtry_ratio= 1, ntree= 100, title= "China Orginal",
-               saveplot= F)
-
-china_p_values_table <- data.frame(rbind(china_all_ncs_p_values, china_original_nc_only_p_values))
-colnames(china_p_values_table) <- paste("Column ", 2:6)
-rownames(china_p_values_table) <- c("all_ncs", "original_nc_only")
-
-china_p_values_table_path <- file.path("out", "china_p_values_table.csv")
-write.csv(china_p_values_table, china_p_values_table_path)
-
-# Figure variable importance 
-# Y axis - when “y” is the label
-# X axis - when IV is the label 
-# Using specification of column 6 
-
-draw_importance_graph(china_1990, y= "outcome1990",
-                      instrument = "instrument2000",
-                      controls= col_6_controls[2:length(col_6_controls)],
-                      all_controls= all_controls,
-                      weights = "timepwt48",
-                      variables_to_remove = c("timepwt48", "outcome1990", "instrument2000"),
-                      "China column 6 spec")
-
-
-# "Using School Choice Lotteries to Test Measures of School Effectiveness" (Deming)
-
-# This file loads all the necessary data and functions for school article
-# sourcing the file will result in loading the main functions:
-# (1) get_formula_for_table_1_lottery() 
-# which creates the formula for replicating table 1 in the article
-# (2) get_formula_for_iv_by_NC
-# which residualize the iv given the NCs
-# As well as loading cms data:
-# (1) cms - the "raw" data, the output of the Stata do file 
-# (2) curr_cms - only rows that have the lottery_fe (fixed effects), which is the
-# unit of randomization for the lottery
-
-source("School Init.R")
-
-# This file consists the function that runs NCIV test for few potential IVs in Deming
-# sourcing the file will result in loading the following function:
-# (1) run_school_nciv() - which runs a permutations test (both lm and felm)
-# (2) run_school_variable_importance() - which runs variable importance for 
-# the controls specification decalred in the article
-# As well as the inner function:
-# (*) prepare_school_data
-source("School Run.R")
-
-# Deming - histogram of of permutation test
-# A - his instrument
-# B - our instrument (without home school)
-# C- pure lottery
-# Using the specification that he uses in the paper
-run_school_nciv(data= curr_cms, ivs= c("lottery", "lott_VA","new_lott_VA"),
-                                   controls_specifications = 3, #the specification 
-                                   #in the article
-                                   saveplot= T,
-                                   iterations=1, permutations=20, ntree= 100,
-                                   mtry_ratio= 1/3, OOB=T, randomize_lottery=F)
-
-
-
-# run potential IVS for lottery article
-#Tabe: Deming p-value
-# Rows: instruments (his IV, raw lottery results, corrected IV)
-# Cols: different controls (none, lottery fixed effects, home school) 
-
-school_p_values <- run_school_nciv(data= curr_cms, 
-                                   ivs= c("lottery", "lott_VA","new_lott_VA"),
-                controls_specifications = 1:4,
-                saveplot= F,
-                iterations=1, permutations=20, ntree= 100,
-                mtry_ratio= 1/3, OOB=T, randomize_lottery=F)
-
-full_file_name <-  file_full_path <- file.path("out", "school_p_values.csv")
-write.csv(school_p_values, full_file_name)
-
-#run sanity check (replace lottery with Bernoulli RV)
-# run_school_nciv(data= curr_cms, ivs= c("lottery"),
-#                 controls_specifications = 1:4,
-#                 saveplot= F, iterations= 1,
-#                 permutations=20, ntree=20,
-#                 mtry_ratio= 1/3, OOB=T, randomize_lottery=T)
-
-run_school_variable_importance(curr_cms, c("lottery", "lott_VA","new_lott_VA"))
-
-
-
-
+get_r2_from_interactions_model <- function(n_observations, # the number of observations in
+                                        # each iteration
+                                        sg =1, # the standard variation for the unmeasured confounder
+                                         number_of_all_ncs_value, # the number of 
+                                         # all variables in the output data frame
+                                          curr_n_number_of_good_ncs_value, # hyper parameter: vector of
+                                         # number of negative control variables (out 
+                                         # of number_of_all_ncs_value) - HAS TO BE > 1
+                                        hyper_parameter, # hyper parameter: vector of
+                                         # alpha - the fraction of the linear effect of the unmeasured
+                                         # confounder on the negative control variables. when alpha=1
+                                         # there is only linear effect, when alpha=0 there is only
+                                         # effect by the interactions of two unmeasured confounder
+                                         single_nc_power, # the coefficient of the effect of
+                                         # the unmeasured confounder on the negative controls
+                                         ntree
+)
+{
+  curr_alpha <- hyper_parameter
+  
+  data <- create_interactions_multi_nc(n= n_observations, 
+                                       sg =sg, # the standard variation for the unmeasured confounder
+                               nc_power=single_nc_power*curr_n_number_of_good_ncs_value,
+                               nc_power_split="uniform", 
+                               number_of_first_good_ncs = curr_n_number_of_good_ncs_value,
+                               number_of_second_good_ncs = curr_n_number_of_good_ncs_value,
+                               number_of_bad_ncs = number_of_all_ncs_value- 2*curr_n_number_of_good_ncs_value,
+                               alpha= curr_alpha,
+                               is_null_scenario = F)
+  
+  return(get_model_mse(data= data,
+                       instrument_form= "iv",
+                       instrument= "iv", 
+                       controls= c("t"),
+                       weights= NULL, variables_to_remove= c("h1","h2", "y", "iv"),
+                       title = "Simulation bad NC", n_permutations= n_permutations, 
+                       conditioned = T, OOB= T, saveplot=F,
+                       mtry_ratio= 1/3, ntree=ntree))
+}
 
