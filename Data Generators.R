@@ -1,5 +1,63 @@
 library(systemfit)
 
+# create a data frame with iv, treatment, 2 unmeasured confounders and negative 
+# control variables where the unmeasured confounder affects the iv in 
+# a combination of linear and interaction between the two unmeasured confounders
+# the negative control variable are associated linearly with the unmeasured confounder
+create_interactions_multi_nc <- function(n =100,# the number of observations in
+                                         # each iteration
+                                         sg =1, # the standard variation for the unmeasured confounder
+                                         inst.effect= 0.2, # the coefficient of the effect of the 
+                                         # instrumental variable on the treatment
+                                         number_of_first_good_ncs= 5, # The number of negative control 
+                                         # variable associated with the first unmeasured confounder
+                                         number_of_second_good_ncs= 5, # The number of negative control 
+                                         # variable associated with the second unmeasured confounder
+                                         number_of_bad_ncs = 50, # The number of independent variables 
+                                         # in the data frame which are not associated with either unmeasured confounder
+                                         nc_power=1, # the sum of coefficient of the effect of the
+                                         # unmeasured confounder on the negative control variables
+                                         nc_power_split= "uniform", # the distribution of the effects 
+                                         # of the unmeasured confounder on the negative control variables
+                                         # can be uniform or exponential
+                                         alpha= 0, # hyper parameter: the fraction of the linear effect of the unmeasured
+                                         # confounder on the negative control variables. when alpha=1
+                                         # there is only linear effect, when alpha=0 there is only
+                                         # effect by the interactions of two unmeasured confounder
+                                         is_null_scenario = F
+) {
+  sg_y <- sg
+  h1 <- rnorm(n, 0, sg)
+  h2 <- rnorm(n, 0, sg)
+  iv <- (1-is_null_scenario)*((alpha/2)*h1 + (alpha/2)*h2 + (1-alpha)*h1*h2) + rnorm(n, 0, sg)
+  t <- inst.effect*iv+ rnorm(n, 0, sg)
+  y <- t + (alpha/2)*h1 + (alpha/2)*h2 + (1-alpha)*h1*h2 + rnorm(n, 0, sg_y)
+  
+  nc_power_for_single_nc  <- switch(   
+    nc_power_split, 
+    "uniform"=  rep(nc_power/number_of_first_good_ncs, number_of_first_good_ncs),
+    "exp"= nc_power * c(1/(2^(1:(number_of_first_good_ncs-1))), 1/(2^(number_of_first_good_ncs-1)))
+  )
+  
+  good_ncs1 <- controls.matrix <- foreach (pl = 1:number_of_first_good_ncs, .combine ="cbind")  %do% {
+    get_nc_col(nc_power_for_single_nc[pl], h1, n, sg)
+  }
+  
+  good_ncs2 <- controls.matrix <- foreach (pl = 1:number_of_second_good_ncs, .combine ="cbind")  %do% {
+    get_nc_col(nc_power_for_single_nc[pl], h2, n, sg)
+  }
+  
+  bad_ncs <- controls.matrix <- foreach (pl = 1:number_of_bad_ncs, .combine ="cbind")  %do% {
+    rnorm(n, 0, sg)
+  }
+  colnames(good_ncs1) <- paste0("good_nc", 1:number_of_first_good_ncs)
+  colnames(good_ncs2) <- paste0("good_nc", (number_of_first_good_ncs+1):(number_of_first_good_ncs+number_of_second_good_ncs))
+  
+  colnames(bad_ncs) <- paste0("bad_nc", 1:number_of_bad_ncs)
+  
+  return(data.frame(h1, h2,iv, t,y, good_ncs1,good_ncs2, bad_ncs))
+}
+
 # create a data frame with iv, treatment, unmeasured confounder and negative 
 # control variables where the unmeasured confounder affects the iv in 
 # a combination of linear and squared way.
@@ -19,13 +77,15 @@ create_degree_nc <- function(n =100, # the number of observations in
                              nc_power_split= "uniform", # the distribution of the effects 
                              # of the unmeasured confounder on the negative control variables
                              # can be uniform or exponential
-                             alpha= 0 # hyper parameter: the fraction of the linear effect of the unmeasured
+                             alpha= 0, # hyper parameter: the fraction of the linear effect of the unmeasured
                              # confounder on the negative control variables. when alpha=1
                              # there is only linear effect, when alpha=0 there is only
                              # effect by the squared unmeasured confounder
+                             is_null_scenario = F
                              ) {
+ 
   h <- rnorm(n, 0, sg)
-  iv <- (alpha)*h + (1-alpha)*(h^2) + rnorm(n, 0, sg)
+  iv <- (1-is_null_scenario)*((alpha)*h + (1-alpha)*(h^2)) + rnorm(n, 0, sg)
   t <- inst.effect*iv+ rnorm(n, 0, sg)
   y <- t + (alpha)*h + (1-alpha)*(h^2) + rnorm(n, 0, sg_y)
   
@@ -55,64 +115,6 @@ create_degree_nc <- function(n =100, # the number of observations in
   
 }
 
-# create a data frame with iv, treatment, 2 unmeasured confounders and negative 
-# control variables where the unmeasured confounder affects the iv in 
-# a combination of linear and interaction between the two unmeasured confounders
-# the negative control variable are associated linearly with the unmeasured confounder
-create_interactions_multi_nc <- function(n =100,# the number of observations in
-                                         # each iteration
-                                         sg =1, # the standard variation for the unmeasured confounder
-                                         sg_y= 1, # the standard variation for the outcome variable
-                                         inst.effect= 0.2, # the coefficient of the effect of the 
-                                         # instrumental variable on the treatment
-                                         number_of_first_good_ncs= 5, # The number of negative control 
-                                         # variable associated with the first unmeasured confounder
-                                         number_of_second_good_ncs= 5, # The number of negative control 
-                                         # variable associated with the second unmeasured confounder
-                                         number_of_bad_ncs = 50, # The number of independent variables 
-                                         # in the data frame which are not associated with either unmeasured confounder
-                                         nc_power=1, # the sum of coefficient of the effect of the
-                                         # unmeasured confounder on the negative control variables
-                                         nc_power_split= "uniform", # the distribution of the effects 
-                                         # of the unmeasured confounder on the negative control variables
-                                         # can be uniform or exponential
-                                         alpha= 0 # hyper parameter: the fraction of the linear effect of the unmeasured
-                                         # confounder on the negative control variables. when alpha=1
-                                         # there is only linear effect, when alpha=0 there is only
-                                         # effect by the interactions of two unmeasured confounder
-                                         ) {
-  
-  h1 <- rnorm(n, 0, sg)
-  h2 <- rnorm(n, 0, sg)
-  iv <- (alpha/2)*h1 + (alpha/2)*h2 + (1-alpha)*h1*h2 + rnorm(n, 0, sg)
-  t <- inst.effect*iv+ rnorm(n, 0, sg)
-  y <- t + (alpha/2)*h1 + (alpha/2)*h2 + (1-alpha)*h1*h2 + rnorm(n, 0, sg_y)
-  
-  nc_power_for_single_nc  <- switch(   
-    nc_power_split, 
-    "uniform"=  rep(nc_power/number_of_first_good_ncs, number_of_first_good_ncs),
-    "exp"= nc_power * c(1/(2^(1:(number_of_first_good_ncs-1))), 1/(2^(number_of_first_good_ncs-1)))
-  )
-  
-  good_ncs1 <- controls.matrix <- foreach (pl = 1:number_of_first_good_ncs, .combine ="cbind")  %do% {
-    get_nc_col(nc_power_for_single_nc[pl], h1, n, sg)
-  }
-  
-  good_ncs2 <- controls.matrix <- foreach (pl = 1:number_of_second_good_ncs, .combine ="cbind")  %do% {
-    get_nc_col(nc_power_for_single_nc[pl], h2, n, sg)
-  }
-  
-  bad_ncs <- controls.matrix <- foreach (pl = 1:number_of_bad_ncs, .combine ="cbind")  %do% {
-    rnorm(n, 0, sg)
-  }
-  colnames(good_ncs1) <- paste0("good_nc", 1:number_of_first_good_ncs)
-  colnames(good_ncs2) <- paste0("good_nc", (number_of_first_good_ncs+1):(number_of_first_good_ncs+number_of_second_good_ncs))
-  
-  colnames(bad_ncs) <- paste0("bad_nc", 1:number_of_bad_ncs)
-  
-  return(data.frame(h1, h2,iv, t,y, good_ncs1,good_ncs2, bad_ncs))
-}
-
 get_nc_col <- function(nc_power_for_single_nc, h, n, sg){
   return(nc_power_for_single_nc*h + rnorm(n,0, sg))
 }
@@ -138,14 +140,15 @@ create_ces_nc <- function(n =100,# the number of observations in
                           nc_power_split= "uniform", # the distribution of the effects 
                           # of the unmeasured confounder on the negative control variables
                           # can be uniform or exponential
-                          rho= 0 # hyper parameters: the value
+                          rho= 0, # hyper parameters: the value
                           # that determine the shape of CES function (described above)
+                          is_null_scenario = F
                           )
   {
   
-  k <- rnorm(n, 0, sg)#
-  l <- rnorm(n, 0, sg)#runif(n,-2,2)#
-  iv <- ces_q(k, l, 1)
+  k <- runif(n, 0, 2) #(n, 0, sg)#
+  l <- runif(n, 0, 2) #(n, 0, sg)#runif(n,-2,2)#
+  iv <- (1-is_null_scenario)*ces_q(k, l, rho) + rnorm(n, 0, sg)
   t <- inst.effect*iv+ rnorm(n, 0, sg)
   y <- t + ces_q(k, l, rho) + rnorm(n, 0, sg_y)
   
@@ -176,6 +179,9 @@ create_ces_nc <- function(n =100,# the number of observations in
 
 ces_q <- function(k, l, rho)
 {
+  if(rho == 0){
+    return(1)
+  }
   return((k^rho + l^rho)^(1/rho))
 }
 
@@ -209,22 +215,44 @@ prepare_simulations_results <- function(results_raw, #2-D (alpha * number_of_goo
                                         n_permutations, # the number of permutations
                                         # in the the permutations tests (RF, Bagging)
                                         # for each iteration
-                                        ntree # the number of trees in the RF prediction
+                                        ntree, # the number of trees in the RF prediction
                                         # algorithm used for NCIV test
+                                        is_null_scenario,
+                                        sg,
+                                        constant_snr_sgs_mat = NULL # if needed - matrix of coefficients
+                                        # for keeping constant SNR
                                         ) {
   
-  results <- data.frame(matrix(ncol = length(columns), nrow = 0))
-  colnames(results) <- columns
+
+  colnames(results_raw) <- number_of_good_ncs_values
+  results <- as.data.frame(cbind(alpha_values, results_raw)) %>% 
+    pivot_longer(cols = matches("[0-9]+"), names_to = "number_of_good_ncs_values",
+               values_to = "rejection_rate") %>%
+    mutate(number_of_good_ncs_values  = as.integer(number_of_good_ncs_values ),
+           scenario = scenario,
+           algo = algo,
+           n_value = n_value,
+           number_of_all_ncs_value = number_of_all_ncs_value,
+           n_iterations = n_iterations,
+           n_permutations = n_permutations, 
+           single_nc_power = single_nc_power,
+           sg= sg,
+           ntree = ntree,
+           is_null_scenario= is_null_scenario) %>% 
+    relocate(rejection_rate)
   
-  for (i in 1:length(alpha_values)){
-    for (j in 1:length(number_of_good_ncs_values)){
-      
-      line <- c(scenario, algo, n_value, number_of_all_ncs_value, n_iterations,
-                n_permutations, number_of_good_ncs_values[j],
-                alpha_values[i], single_nc_power, ntree,
-                results_raw[i,j])
-      results <- rbind(results, line)
-    }
+if (!(is.null(constant_snr_sgs_mat)))
+  {
+  sgs_power_mat <- as.data.frame(cbind(alpha_values, constant_snr_sgs_mat)) %>%  
+    pivot_longer(
+      cols = matches("[0-9]+"), names_to = "number_of_good_ncs_values",
+      values_to = "sg") %>% 
+    mutate(number_of_good_ncs_values  = as.integer(number_of_good_ncs_values ))
+  
+  results <- results %>% 
+    select(-"sg") %>% 
+    inner_join(sgs_power_mat, by= c("alpha_values", "number_of_good_ncs_values"))
   }
-  return(as.matrix(results))
+
+  return(results)
 }
