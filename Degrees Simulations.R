@@ -24,8 +24,9 @@ run_degrees_simulations <- function(n_value, # the number of observations in
                                     # effect by the squared unmeasured confounder
                                     single_nc_power, # the coefficient of the effect of
                                     # the unmeasured confounder on the negative controls
-                                    ntree # the number of trees in the RF prediction
+                                    ntree, # the number of trees in the RF prediction
                                     # algorithm used for NCIV test
+                                    is_null_scenario
                                     ) {
   sg_y <- sg <- 1
   
@@ -45,10 +46,13 @@ run_degrees_simulations <- function(n_value, # the number of observations in
                                                           .export = c("get_min_p_val", "create_degree_nc", "get_nc_col"),
                                                           .combine ="cbind") %dopar% 
                                                    {
-                                                     get_min_p_val(data= create_degree_nc(n= n_value,  nc_power=single_nc_power*curr_n_number_of_good_ncs_value, nc_power_split="uniform", 
+                                                     get_min_p_val(data= create_degree_nc(n= n_value,
+                                                                                          nc_power=single_nc_power*curr_n_number_of_good_ncs_value,
+                                                                                          nc_power_split="uniform", 
                                                                                           number_of_good_ncs = curr_n_number_of_good_ncs_value,
                                                                                           number_of_bad_ncs = number_of_all_ncs_value- curr_n_number_of_good_ncs_value,
-                                                                                          alpha= curr_alpha),
+                                                                                          alpha= curr_alpha,
+                                                                                          is_null_scenario = is_null_scenario),
                                                                    number_of_good_ncs = curr_n_number_of_good_ncs_value,
                                                                    number_of_bad_ncs = number_of_all_ncs_value- curr_n_number_of_good_ncs_value) < (rejection_rate/number_of_all_ncs_value)
                                                    }
@@ -59,7 +63,7 @@ run_degrees_simulations <- function(n_value, # the number of observations in
                 n_iterations, toString(number_of_good_ncs_values), number_of_all_ncs_value, single_nc_power,  toString(alpha_values), Sys.time()))   
   print( Sys.time() - start_time)
   
-  columns <- c("Scenario", "Algorithm", "n_value", "number_of_all_ncs_value", "n_iterations",
+  columns <- c("Scenario", "Algorithm", "n_observations", "number_of_all_ncs_value", "n_iterations",
                "n_permutations", "number_of_good_ncs_value", "alpha_value",
                "single_nc_power", "ntree", "rejection rate")
   
@@ -68,7 +72,8 @@ run_degrees_simulations <- function(n_value, # the number of observations in
                                               single_nc_power, alpha_values,
                                               number_of_good_ncs_values, n_value,
                                               number_of_all_ncs_value, n_iterations,
-                                              n_permutations, ntree)
+                                              n_permutations, ntree,
+                                              is_null_scenario)
   
   print(results_bonf)  
   
@@ -90,7 +95,8 @@ run_degrees_simulations <- function(n_value, # the number of observations in
                                               get_f_p_val(data= create_degree_nc(n= n_value,  nc_power=single_nc_power*curr_n_number_of_good_ncs_value, nc_power_split="uniform", 
                                                                                  number_of_good_ncs = curr_n_number_of_good_ncs_value,
                                                                                  number_of_bad_ncs = number_of_all_ncs_value- curr_n_number_of_good_ncs_value,
-                                                                                 alpha= curr_alpha),
+                                                                                 alpha= curr_alpha,
+                                                                                 is_null_scenario = is_null_scenario),
                                                           number_of_good_ncs = curr_n_number_of_good_ncs_value,
                                                           number_of_bad_ncs = number_of_all_ncs_value- curr_n_number_of_good_ncs_value) < (rejection_rate)
                                             }
@@ -106,7 +112,8 @@ run_degrees_simulations <- function(n_value, # the number of observations in
                                                 single_nc_power, alpha_values,
                                                 number_of_good_ncs_values, n_value,
                                                 number_of_all_ncs_value, n_iterations,
-                                                n_permutations, ntree)
+                                                n_permutations, ntree,
+                                                is_null_scenario)
   
   print(results_f_test)
   
@@ -130,7 +137,8 @@ run_degrees_simulations <- function(n_value, # the number of observations in
                                                    (get_sur_p_val(data= create_degree_nc(n= n_value,  nc_power=single_nc_power*curr_n_number_of_good_ncs_value, nc_power_split="uniform", 
                                                                                                      number_of_good_ncs = curr_n_number_of_good_ncs_value,
                                                                                                      number_of_bad_ncs = number_of_all_ncs_value- curr_n_number_of_good_ncs_value,
-                                                                                                     alpha= curr_alpha),
+                                                                                                     alpha= curr_alpha,
+                                                                                         is_null_scenario = is_null_scenario),
                                                                               number_of_good_ncs = curr_n_number_of_good_ncs_value,
                                                                               number_of_bad_ncs = number_of_all_ncs_value- curr_n_number_of_good_ncs_value) <= rejection_rate)
                                                  }
@@ -147,7 +155,8 @@ run_degrees_simulations <- function(n_value, # the number of observations in
                                              single_nc_power, alpha_values,
                                              number_of_good_ncs_values, n_value,
                                              number_of_all_ncs_value, n_iterations,
-                                             n_permutations, ntree)
+                                             n_permutations, ntree,
+                                             is_null_scenario)
   
   print(results_sur)  
   
@@ -155,23 +164,24 @@ run_degrees_simulations <- function(n_value, # the number of observations in
   start_time <- Sys.time()
   results_rf_raw <-   foreach (curr_alpha = alpha_values,
                                         .packages = c("dplyr","foreach"),
-                                        .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix", "calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
+                                        .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC","calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
                                         .combine ="rbind") %do% {
                                           foreach (curr_n_number_of_good_ncs_value = number_of_good_ncs_values,
                                                    .packages = c("dplyr","foreach"),
-                                                   .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix", "calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
+                                                   .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC","calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
                                                    .combine ="cbind") %do%
                                             {
                                               good_nc_number_iteration_results <- 
                                                 foreach (curr_iter = 1:n_iterations,
                                                          .packages = c("dplyr","foreach"),
-                                                         .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix", "calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
+                                                         .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC", "calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
                                                          .combine ="cbind") %dopar% 
                                                 {
                                                   (permutations.test.for.lm(data= create_degree_nc(n= n_value,  nc_power=single_nc_power*curr_n_number_of_good_ncs_value, nc_power_split="uniform", 
                                                                                                    number_of_good_ncs = curr_n_number_of_good_ncs_value,
                                                                                                    number_of_bad_ncs = number_of_all_ncs_value- curr_n_number_of_good_ncs_value,
-                                                                                                   alpha= curr_alpha),
+                                                                                                   alpha= curr_alpha,
+                                                                                                   is_null_scenario = is_null_scenario),
                                                                             instrument_form= "iv",
                                                                             instrument= "iv", 
                                                                             controls= c("t"),
@@ -193,30 +203,32 @@ run_degrees_simulations <- function(n_value, # the number of observations in
                                             single_nc_power, alpha_values,
                                             number_of_good_ncs_values, n_value,
                                             number_of_all_ncs_value, n_iterations,
-                                            n_permutations, ntree)
+                                            n_permutations, ntree,
+                                            is_null_scenario)
   print(results_rf)  
   
   # Bagging
   start_time <- Sys.time()
   results_bag_raw <-   foreach (curr_alpha = alpha_values,
                                          .packages = c("dplyr","foreach"),
-                                         .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix", "calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
+                                         .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC","calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
                                          .combine ="rbind") %do% {
                                            foreach (curr_n_number_of_good_ncs_value = number_of_good_ncs_values,
                                                     .packages = c("dplyr","foreach"),
-                                                    .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix", "calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
+                                                    .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC","calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
                                                     .combine ="cbind") %do%
                                              {
                                                good_nc_number_iteration_results <- 
                                                  foreach (curr_iter = 1:n_iterations,
                                                           .packages = c("dplyr","foreach"),
-                                                          .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix", "calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
+                                                          .export = c("permutations.test.for.lm", "run.rf.multiple.negative.controls","get_NC_matrix","prepare_z_NC", "calculate.visualize.p.values","create_degree_nc", "get_nc_col"),
                                                           .combine ="cbind") %dopar% 
                                                  {
                                                    (permutations.test.for.lm(data= create_degree_nc(n= n_value,  nc_power=single_nc_power*curr_n_number_of_good_ncs_value, nc_power_split="uniform", 
                                                                                                     number_of_good_ncs = curr_n_number_of_good_ncs_value,
                                                                                                     number_of_bad_ncs = number_of_all_ncs_value- curr_n_number_of_good_ncs_value,
-                                                                                                    alpha= curr_alpha),
+                                                                                                    alpha= curr_alpha,
+                                                                                                    is_null_scenario = is_null_scenario),
                                                                              instrument_form= "iv",
                                                                              instrument= "iv", 
                                                                              controls= c("t"),
@@ -234,11 +246,12 @@ run_degrees_simulations <- function(n_value, # the number of observations in
                                          }
   print( Sys.time() - start_time)
   results_bag <- prepare_simulations_results(results_bag_raw, columns,
-                                             "Interactions", "Bagging", 
+                                             "Degree", "Bagging", 
                                              single_nc_power, alpha_values,
                                              number_of_good_ncs_values, n_value,
                                              number_of_all_ncs_value, n_iterations,
-                                             n_permutations, ntree)  
+                                             n_permutations, ntree,
+                                             is_null_scenario)  
   
   print(results_bag)
   
@@ -247,8 +260,7 @@ run_degrees_simulations <- function(n_value, # the number of observations in
                    results_sur,
                    results_rf,
                    results_bag)
-  colnames(results) <- columns
-  
+
   file_full_path <- file.path("out", paste("Simulations Degrees", gsub("[:]", " ",Sys.time())))
   write.csv(results, sprintf("%s.csv", file_full_path))
   
