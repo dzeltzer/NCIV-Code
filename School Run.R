@@ -4,22 +4,9 @@ run_school_nciv <- function(data, #cms school data
                             # need to be checked in NCIV permutations
                             controls_specifications = 1:4, #the controls specifications
                             # for the NCIV test
-                            saveplot= F,# whether to save plot and CSV of the 
-                            # permutations test p
-                            iterations, # the number of iterations to run a full
-                            # cycle of NCIV permutations for all IVs declared 
-                            # just above (should be 1 in most cases)
-                            permutations, # the number of permutations in each 
-                            # NCIV test
-                            ntree, # the number of trees in the RF prediction
-                            # algorithm used for NCIV test
-                            mtry_ratio, #the ratio of variables to check in 
-                            # each iteration of RF algorithm
-                            OOB, # use Out Of Bag RMSE instead of Cross Validation
-                            # error
-                            randomize_lottery #for sanity check, if True generate 
-                            # Bernoulli RV instead of "lottery" variable
-                            ) {
+                            specified_nco,
+                            randomize_lottery = F) {
+  
   assertthat::assert_that(!(randomize_lottery &
                              !(length(ivs) == 1 & ivs[1] == "lottery")))
   
@@ -27,7 +14,7 @@ run_school_nciv <- function(data, #cms school data
   models <-  c("2") #c("1,2")#
   prev_yrs <- c("all") #c("02", "2yr", "all")
   
-  for (i in 1:iterations){
+
     # There are 4 different models for the calculation of the 2nd stage,
     # VA= Value Added (of a school)
     # (1) Intercept for school only, no student prior tests: test_score = a*VA 
@@ -53,7 +40,7 @@ run_school_nciv <- function(data, #cms school data
         for (iv in ivs){
           iv_ix <- iv_ix +1
           iv.start.time <- Sys.time()
-          print(sprintf("start processing for iv= %s permutations= %s", iv, permutations))
+          print(sprintf("start processing for iv= %s", iv))
           title <- sprintf("iv=%s model= mod_%s_mix_%s", iv, model, prev_yr)
           
 
@@ -64,82 +51,68 @@ run_school_nciv <- function(data, #cms school data
           
           # (1) Linear model with no controls
           if (1 %in% controls_specifications){
-            results[iv_ix, 1] <- permutations.test.for.lm(data= data_reduced,
-                                                          instrument_form = iv,
-                                                          instrument= iv,
-                                                          controls=relevant_cols,
-                                                          weights = NULL,
-                                                          variables_to_remove= c("testz2003", "VA",ivs),
-                                                          title = title,
-                                                          n_permutations= permutations,
-                                                          conditioned = F,
-                                                          OOB=OOB,
-                                                          saveplot= saveplot,
-                                                          mtry_ratio= mtry_ratio,
-                                                          ntree= ntree)
+            bonf.f.test.for.lm(data= data_reduced,
+                                     instrument_form= iv,
+                                     instrument= iv,
+                                     controls= relevant_cols,
+                                     weights=NULL,
+                                     variables_to_remove= c("testz2003", "VA",ivs),
+                                     title= title,
+                                     conditioned = F,
+                                      specified_nco = specified_nco
+                                                )
           }
-
           
+
           # (2) Linear model with controls 
           if (2 %in% controls_specifications){
-            results[iv_ix, 2] <- permutations.test.for.lm(data= data_reduced,
-                                                          instrument_form = iv,
-                                                          instrument= iv,
-                                                          controls=relevant_cols,
-                                                          weights = NULL,
-                                                          variables_to_remove= c("testz2003", "VA",ivs),
-                                                          title = title,
-                                                          n_permutations= permutations,
-                                                          conditioned = T,
-                                                          OOB=OOB,
-                                                          saveplot= saveplot,
-                                                          mtry_ratio= mtry_ratio,
-                                                          ntree= ntree)
+            bonf.f.test.for.lm(data= data_reduced,
+                                      instrument_form= iv,
+                                      instrument= iv,
+                                      controls= relevant_cols,
+                                      weights=NULL,
+                                      variables_to_remove= c("testz2003", "VA",ivs),
+                                      title= title,
+                                      conditioned = T,
+                                      specified_nco = specified_nco
+            )
           }
 
           # (3) Fixed Effects Linear model with controls, the model used in the article
           if (3 %in% controls_specifications){
-            results[iv_ix, 3] <- permutations.test.for.felm(data= data_reduced,
-                                                            ins_lfe_formula = get_formula_for_iv_by_controls(iv, "lottery_FE", relevant_cols),
-                                                            instrument=iv,
-                                                            controls= relevant_cols, #c("1"),
-                                                            fixed= "lottery_FE",
-                                                            variables_to_remove= c("testz2003", "VA", ivs),
-                                                            title= title,
-                                                            n_permutations= permutations,
-                                                            conditioned = T,
-                                                            OOB =OOB,
-                                                            saveplot= saveplot,
-                                                            mtry_ratio= mtry_ratio,
-                                                            ntree= ntree)
+            bonf.f.test.for.felm(data= data_reduced,
+                                      ins_lfe_formula = get_formula_for_iv_by_controls(iv, "lottery_FE", relevant_cols),
+                                      instrument=iv,
+                                      controls= relevant_cols, #c("1"),
+                                      fixed= "lottery_FE",
+                                      variables_to_remove= c("testz2003", "VA", ivs),
+                                      title= title,
+                                      conditioned = T,
+                                      specified_nco = specified_nco)
           }
 
           
           # (4) Fixed Effects Linear model with controls + VA of the home school of the student
           if (4 %in% controls_specifications){
-            results[iv_ix, 4] <- permutations.test.for.felm(data= data_reduced,
-                                                            ins_lfe_formula = get_formula_for_iv_by_controls(iv, "lottery_FE", c(relevant_cols,sprintf("hm_mod%smix_%s_test", model, prev_yr))),
-                                                            instrument=iv,
-                                                            controls= c(relevant_cols,sprintf("hm_mod%smix_%s_test", model, prev_yr)), #c("1"),
-                                                            fixed= "lottery_FE",
-                                                            variables_to_remove= c("testz2003","VA", ivs),
-                                                            title= paste(title, "with hm"),
-                                                            n_permutations= permutations,
-                                                            conditioned = T,
-                                                            OOB =OOB,
-                                                            saveplot= saveplot,
-                                                            mtry_ratio= mtry_ratio,
-                                                            ntree= ntree)
+            bonf.f.test.for.felm(data= data_reduced,
+                                      ins_lfe_formula = get_formula_for_iv_by_controls(iv, "lottery_FE", c(relevant_cols,sprintf("hm_mod%smix_%s_test", model, prev_yr))),
+                                      instrument=iv,
+                                      controls= c(relevant_cols,sprintf("hm_mod%smix_%s_test", model, prev_yr)), #c("1"),
+                                      fixed= "lottery_FE",
+                                      variables_to_remove= c("testz2003","VA", ivs),
+                                      title= paste(title, "with hm"),
+                                      conditioned = T,
+                                     specified_nco = specified_nco)
           }
 
-          print(sprintf("Done processing for iv= %s permutations= %s. Runtime is:", iv, permutations))
+          print(sprintf("Done processing for iv= %s  Runtime is:", iv))
           print(Sys.time() - iv.start.time)
         }
         print(sprintf("Done working on: model= %s prev_yr= %s", model, prev_yr))
         print(Sys.time() - model.start.time)
         
       }
-    }
+    
     
     colnames(results) <- c("lm: no controls", "lm: with controls", 
                            "felm with controls (as in the article",
@@ -191,7 +164,7 @@ run_school_variable_importance <- function(data, #cms school data
                                   all_controls= relevant_cols,
                                   fixed = "lottery_FE",
                                   variables_to_remove = c("testz2003","VA", ivs),
-                                  paste(iv, "Felm + Controls"))
+                                  paste("Deming (2014) - School Effectiveness - Variable Importance for", iv))
           
           print(sprintf("Done processing for iv= %s. Runtime is:", iv))
           print(Sys.time() - iv.start.time)
