@@ -65,6 +65,60 @@ permutations.test.for.felm <- function(data,
                                       saveplot))
 }
 
+
+bonf.f.test.for.felm <- function(data,
+                                 ins_lfe_formula, #the fixed effects formula
+                                 # for the iv
+                                 instrument, # the name of the instrument
+                                 controls, # the names of the controls
+                                 fixed, # the name of the fixed effects groups column
+                                 variables_to_remove, # the names of the variables 
+                                 title, #the title for the output file and graph
+                                 weights = NULL, #the weights column name used for the residualization
+                                 specified_nco = NULL,
+                                 specified_for_sur_only = FALSE,
+                                 conditioned = T
+) {
+  
+  if (conditioned){
+    felm_of_controls <-  felm(formula= ins_lfe_formula, data = data)
+    z <- as.vector(felm_of_controls$residuals)
+  }
+  else{
+    z <- pull(data, instrument)
+  }
+  NC <- get_NC_matrix_felm(select(data,-one_of(variables_to_remove)),  controls, fixed, T)
+  
+  
+  l1 <- lm(z ~ ., cbind(z, NC))
+  coefs <- summary(l1)$coefficients
+  min_coef_p_vals <- min(coefs[2:nrow(coefs),4])
+  f_statistic <- summary(l1)$fstatistic
+  f_test_p_val <- pf(f_statistic[1], f_statistic[2], f_statistic[3], lower.tail = FALSE)
+  
+  if (!is.null(specified_nco) && specified_for_sur_only){
+    NC <- NC %>% 
+      select(setdiff(specified_nco, controls))
+  }
+  
+  NC_raw <- NC
+  NC <- NC %>%
+    select(-ch1_mod2mix_all_test)
+  
+  fitsur <- systemfit(lapply(paste0(colnames(NC), " ~ z"), as.formula), method = "SUR", data= cbind(z, NC))
+
+  restrict <-  paste0("eq", 1:ncol(NC), "_z=0")
+  #
+  ft <- linearHypothesis(fitsur, restrict,  test = "F" )
+
+  sur_p_val <- ft$`Pr(>F)`[2]
+  
+  print(sprintf("%s bonf t-test: %.3f (out of %s RR= %.3f, %s), f-test : %.3f, SUR: %.3f", title, 
+                min_coef_p_vals,
+                nrow(coefs)-1,  (0.05/(nrow(coefs)-1)) ,min_coef_p_vals < (0.05/(nrow(coefs)-1)),
+                f_test_p_val, sur_p_val))
+}
+
 # run single RF model on the residualiztion results
 # input: data and parameters for the RF model
 # output: MSE of the model IV = f(NCs)
@@ -136,6 +190,36 @@ get_NC_matrix_felm <- function(data, #matrix of the data (controls+NCs)
   return(NC_res)
 }
 
+get_model_mse <- function(data, 
+                         instrument_form, # the form of the instrument, 
+                                     # for example: logarithmic: log(instrument2000), 
+                                     # linear: instrument2000
+                                     instrument, # the name of the instrument
+                                     controls,# the names of the controls
+                                     weights = NULL, #the weights column name used for the residualization
+                                     variables_to_remove, # the names of the variables not to used
+                                     # as NCs
+                                     title, #the title for the output file and graph
+                                     n_permutations= 5, # the number of permutations in each 
+                                     # NCIV test
+                                     conditioned = T, #whether to residualize on the controls
+                                     OOB= F, # use Out Of Bag RMSE instead of Cross Validation error
+                                     saveplot, # whether to save plot and CSV of the 
+                                     # permutations test
+                                     mtry_ratio, # the ratio of variables to check in 
+                                     # each iteration of RF algorithm
+                                     ntree # the number of trees in the RF prediction
+                                     # algorithm used for NCIV test
+) {
+  NC_z <- prepare_z_NC(data, instrument_form, controls, weights, conditioned, instrument, variables_to_remove)
+  
+  NC <- NC_z[[1]]
+  z <- NC_z[[2]]
+  
+  return(run.rf.multiple.negative.controls(NC, z, F,
+                                                        OOB, mtry_ratio, ntree)) 
+}
+
 # run permutations test with linear regression model. The function first residualize
 # the iv and the controls according to the specified linear regression model and 
 # controls
@@ -166,6 +250,85 @@ permutations.test.for.lm <- function(data,
                                      ntree # the number of trees in the RF prediction
                                      # algorithm used for NCIV test
                                      ) {
+  NC_z <- prepare_z_NC(data, instrument_form, controls, weights, conditioned, instrument, variables_to_remove)
+  
+  NC <- NC_z[[1]]
+  z <- NC_z[[2]]
+  
+  controls_results <- run.rf.multiple.negative.controls(NC, z, F,
+                                                               OOB, mtry_ratio, ntree) 
+  
+  permutations_results <- 
+    foreach (ite = 1:n_permutations,.packages = c("dplyr","foreach"),
+             .export = c("run.rf.multiple.negative.controls", "get_NC_matrix", "rfcv"),
+             .combine ="c")  %dopar% {
+               run.rf.multiple.negative.controls(NC, z, T,
+                                                        OOB, mtry_ratio, ntree) 
+             }
+  title <- sprintf("IV test: method= lm %s\nconditiond=%s, OOB=%s, ntree=%s", title, conditioned, OOB, ntree)
+  
+  return(calculate.visualize.p.values(controls_results, permutations_results,
+                                      title, OOB, saveplot))
+}
+
+# run permutations test with linear regression model. The function first residualize
+# the iv and the controls according to the specified linear regression model and 
+# controls
+# input: data, releavant formulas parameters for the permutations tests and for 
+# the RF model
+# output: permutations test p-value for the hypothesis that the IV can be
+# predicted from the NCs
+
+
+bonf.f.test.for.lm <- function(data, 
+                               instrument_form, # the form of the instrument, 
+                               # for example: logarithmic: log(instrument2000), 
+                               # linear: instrument2000
+                               instrument, # the name of the instrument
+                               controls,# the names of the controls
+                               title,
+                               variables_to_remove,# the names of the variables not to used
+                               weights = NULL, #the weights column name used for the residualization
+                               specified_nco = NULL,
+                               specified_for_sur_only = FALSE,
+                               conditioned = T #whether to residualize on the controls
+) {
+  NC_z <- prepare_z_NC(data, instrument_form, controls, weights, conditioned, instrument, variables_to_remove)
+  NC <- NC_z[[1]]
+  
+  if (!is.null(specified_nco) && !specified_for_sur_only){
+    NC <- NC %>% 
+      select(all_of(specified_nco))
+  }
+   
+  z <- NC_z[[2]]
+
+  l1 <- lm(z ~ ., cbind(z, NC))
+  coefs <- summary(l1)$coefficients
+  min_coef_p_vals <- min(coefs[2:nrow(coefs),4])
+  f_statistic <- summary(l1)$fstatistic
+  f_test_p_val <- pf(f_statistic[1], f_statistic[2], f_statistic[3], lower.tail = FALSE)
+  
+  if (!is.null(specified_nco) && specified_for_sur_only){
+    NC <- NC %>% 
+      select(setdiff(specified_nco, controls))
+  }
+  
+  fitsur <- systemfit(lapply(paste0(colnames(NC), " ~ z"), as.formula), method = "SUR", data= cbind(z, NC))
+
+  restrict <-  paste0("eq", 1:ncol(NC), "_z=0")
+  # 
+  ft <- linearHypothesis(fitsur, restrict,  test = "F" )
+  
+  sur_p_val <- ft$`Pr(>F)`[2]
+  
+  print(sprintf("%s bonf t-test: %.3f (out of %s RR= %.3f, %s), f-test : %.3f, SUR: %.3f", title, 
+                min_coef_p_vals,
+                nrow(coefs)-1,  (0.05/(nrow(coefs)-1)) ,min_coef_p_vals < (0.05/(nrow(coefs)-1)),
+                f_test_p_val, sur_p_val))
+}
+
+prepare_z_NC <- function(data, instrument_form, controls, weights, conditioned, instrument, variables_to_remove) {
   ins_formula <- as.formula(paste(instrument_form, "~", paste(controls, collapse="+")))
   lm_of_controls <-  lm(as.formula(ins_formula), data = data)
   weights_vec <- NULL
@@ -186,23 +349,8 @@ permutations.test.for.lm <- function(data,
     z <- pull(data, instrument)
   }
   NC <- get_NC_matrix(select(data,-one_of(variables_to_remove)),  controls, weights_vec, conditioned)
-  
-  controls_results <- run.rf.multiple.negative.controls(NC, z, F,
-                                                               OOB, mtry_ratio, ntree) 
-  
-  permutations_results <- 
-    foreach (ite = 1:n_permutations,.packages = c("dplyr","foreach"),
-             .export = c("run.rf.multiple.negative.controls", "get_NC_matrix", "rfcv"),
-             .combine ="c")  %dopar% {
-               run.rf.multiple.negative.controls(NC, z, T,
-                                                        OOB, mtry_ratio, ntree) 
-             }
-  title <- sprintf("IV test: method= lm %s\nconditiond=%s, OOB=%s, ntree=%s", title, conditioned, OOB, ntree)
-  
-  return(calculate.visualize.p.values(controls_results, permutations_results,
-                                      title, OOB, saveplot))
+  return(list(NC,z))
 }
-
 
 # residualize the NCs by the controls with linear regression model
 # input: data and the names of the control variables
@@ -259,6 +407,11 @@ calculate.visualize.p.values <- function(controls_results, #the MSE of predictin
                                          saveplot = F # whether to save plot and CSV of the
                                          ) {
   n <- length(permutations_results)
+  
+  p_values <- c(t.test(permutations_results, mu= controls_results, alternative = "greater")$p.value,
+                sum(controls_results > permutations_results) /n
+  )
+  title <- ""
   if (saveplot){
     Xaxis <- "RMSE - CV"
     if (OOB){
@@ -275,20 +428,19 @@ calculate.visualize.p.values <- function(controls_results, #the MSE of predictin
       xlab(Xaxis) +
       ggtitle(title)
     print(p)
-    file_title <- stringr::str_trim(sprintf("%s",gsub("[.]|[:]|[\n]|[,]", " ",title)))
+    file_title <- stringr::str_trim(gsub("[.]|[:]|[\n]|[,]", " ",
+                                         sprintf("%s_%s", title,format(Sys.time(), "%Y-%m-%d %H:%M"))
+                                         )
+                                    )
     file_full_path <- file.path("out", file_title)
     ggsave(sprintf("%s.png", file_full_path), p)
     results <- data.frame(permutations_results, 
                           controls_results= c(controls_results, rep(NA, length(permutations_results)-1)))
     write.csv(results, sprintf("%s.csv", file_full_path))
+    print(sprintf("P-values for %s:", title))
+    print(sprintf("t-test: %s, permutations: %s", p_values[1], p_values[2]))
   }
-  
-  
-  p_values <- c(t.test(permutations_results, mu= controls_results, alternative = "greater")$p.value,
-                sum(controls_results > permutations_results) /n
-  )
-  print(sprintf("P-values for %s:", title))
-  print(sprintf("t-test: %s, permutations: %s", p_values[1], p_values[2]))
+
   return(p_values[2])
 }
 
@@ -321,7 +473,8 @@ draw_importance_graph <- function(data,
                                   # variables_to_remove
                                   variables_to_remove, # the names of the variables not to used
                                   # as NCs
-                                  title # the name of the output file and graph
+                                  title, # the name of the output file and graph,
+                                  rf = T
                                   )  {
   
   ins_formula <- as.formula(paste(instrument, "~", paste(controls, collapse="+"))) 
@@ -353,30 +506,47 @@ draw_importance_graph <- function(data,
   
   NC <- get_NC_matrix(select(data,-one_of(variables_to_remove)),  controls,
                       weights_vec, T)
+  if (rf){
+    model_ins <- randomForest::randomForest(NC, instrument_res)
+    model_y <- randomForest::randomForest(NC, y_res)
+    
+    vi_scores_ins_raw <- importance(model_ins, type= 2, scale =T)
+    vi_scores_ins <- vi_scores_ins_raw / max(vi_scores_ins_raw)
+    
+    vi_scores_y_raw <- importance(model_y, type= 2, scale =T)
+    vi_scores_y <- vi_scores_y_raw / max(vi_scores_y_raw)
+    
+  }
+  else{ #Absolute correlation
+    vi_scores_ins_raw <- abs(cor(NC, instrument_res))
+    vi_scores_ins <- vi_scores_ins_raw / max(vi_scores_ins_raw)
+    vi_scores_y_raw <- abs(cor(NC, y_res))
+    vi_scores_y <- vi_scores_y_raw / max(vi_scores_y_raw)
+  }
   
-  model_ins <- randomForest::randomForest(NC, instrument_res)
-  model_y <- randomForest::randomForest(NC, y_res)
-  
-  vi_scores_ins_raw <- importance(model_ins, type= 2, scale =T)
-  vi_scores_ins <- vi_scores_ins_raw / max(vi_scores_ins_raw)
   vi_scores_ins <- data.frame(variable=rownames(vi_scores_ins), vi_scores_ins)
-  vi_scores_y_raw <- importance(model_y, type= 2, scale =T)
-  vi_scores_y <- vi_scores_y_raw / max(vi_scores_y_raw)
   vi_scores_y <- data.frame(variable=rownames(vi_scores_y), vi_scores_y)
+  
+
   
   vi_scores <- vi_scores_ins %>%
     left_join (vi_scores_y,
                by = "variable")
   colnames(vi_scores)[2:3] <- c("ins_score", "y_score")
   
-  file_title <- paste("Variable Importance", title)
+  file_title <- title
   
-  p <- ggplot(vi_scores, aes(ins_score, y_score, label = variable,
-                             color = variable %in% all_controls))+
+  p <- ggplot(data = vi_scores, aes(x = ins_score, y = y_score, label = variable)) +
     geom_point() +
-    ggtitle(file_title)
+    #geom_label_repel(size = 4.5, max.overlaps = 10) +
+    ggtitle(file_title) +
+    labs(x = "IV Variables Importance", y = "Outcome Variables Importance") +  # Change the text of axes titles
+    theme(
+      axis.title = element_text(family = "Arial", size = 13),  # Adjust axis title font properties
+      plot.title = element_text(size = 15)  # Adjust plot title font size
+    )
   
-  print(plotly::ggplotly(p))
+  print(p)
   
   file_full_path <- file.path("out", file_title)
   ggsave(sprintf("%s.png", file_full_path), p)
@@ -427,15 +597,14 @@ draw_felm_importance_graph <- function(data,
                by = "variable")
   colnames(vi_scores)[2:3] <- c("ins_score", "y_score")
   
+  file_title <- title
   
-  file_title <- paste("Variable Importance", title)
-  
-  p <- ggplot(vi_scores, aes(ins_score, y_score, label = variable,
-                             color = variable %in% all_controls))+
+  p <- ggplot(data = vi_scores, aes(x = ins_score, y = y_score, label = variable)) +
     geom_point() +
+    geom_text_repel() +
     ggtitle(file_title)
   
-  print(plotly::ggplotly(p))
+  print(p)
   
   file_full_path <- file.path("out", file_title)
   ggsave(sprintf("%s.png", file_full_path), p)
