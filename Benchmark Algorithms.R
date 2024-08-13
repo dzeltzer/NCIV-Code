@@ -20,7 +20,7 @@ get_f_p_val <- function(data, number_of_good_ncs, number_of_bad_ncs){
   }
   s1 <- lm("iv ~ t", data= data)
   data$iv_res <- s1$residuals
-  s2 <- as.formula(sprintf("iv ~ %s", paste(controls, collapse="+")))
+  s2 <- as.formula(sprintf("iv_res ~ %s", paste(controls, collapse="+")))
   nc_fit <- summary(lm(data = data, formula = s2))
   return(pf(nc_fit$fstatistic[1],nc_fit$fstatistic[2],nc_fit$fstatistic[3],lower.tail=FALSE))
   
@@ -62,9 +62,10 @@ get_min_p_val <- function(data, number_of_good_ncs, number_of_bad_ncs){
     min_bad <- 
       min(foreach (curr_nc = 1:number_of_bad_ncs, .combine ="cbind") %do% 
             {
-              
-              s1 <- as.formula(sprintf("iv ~ bad_nc%s", curr_nc))
-              nc_fit <- summary(lm(data = data, formula = s1))
+              s1 <- lm("iv ~ t", data= data)
+              data$iv_res <- s1$residuals
+              s2 <- as.formula(sprintf("iv_res ~ bad_nc%s", curr_nc))
+              nc_fit <- summary(lm(data = data, formula = s2))
               pf(nc_fit$fstatistic[1],nc_fit$fstatistic[2],nc_fit$fstatistic[3],lower.tail=FALSE)
               
             })
